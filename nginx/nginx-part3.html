@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Two-Layer Connection Pooling — HikariCP + PgBouncer (Part 3 Addendum)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f6f3ea; --paper2:#fffdf7; --paper3:#efe9da;
+    --ink:#211f1a; --ink2:#56534b; --ink3:#85817760;
+    --line:#e2dccd; --line2:#d4cdba;
+    --teal:#0f7b6c; --teal-bg:#e4f0ec; --teal-ink:#0a4f46;
+    --coral:#bb5128; --coral-bg:#f7e7de; --coral-ink:#7d3416;
+    --amber:#a9760f; --amber-bg:#f7eed6; --amber-ink:#6f4d07;
+    --purple:#544aad; --purple-bg:#eae8f6; --purple-ink:#332c75;
+    --red:#a8331f; --red-bg:#f8e3de;
+    --gray-bg:#ece7da;
+    --sans:'IBM Plex Sans',-apple-system,system-ui,sans-serif;
+    --serif:'Fraunces',Georgia,serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.72;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:820px;margin:0 auto;padding:0 24px}
+
+  header.hero{padding:60px 0 32px;border-bottom:2px solid var(--ink);margin-bottom:40px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--teal);margin:0 0 14px}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(32px,5.5vw,52px);line-height:1.05;margin:0;letter-spacing:-.015em}
+  h1 em{font-style:italic;color:var(--coral)}
+  .lede{font-family:var(--serif);font-size:clamp(18px,2.4vw,22px);line-height:1.5;color:var(--ink2);margin:18px 0 22px}
+  .prevlink{display:inline-block;font-family:var(--mono);font-size:13px;color:var(--teal)}
+
+  section{margin-bottom:52px;scroll-margin-top:24px}
+  .num{font-family:var(--mono);font-size:13px;color:var(--coral);letter-spacing:.1em}
+  h2{font-family:var(--serif);font-weight:600;font-size:clamp(25px,4vw,34px);line-height:1.12;margin:6px 0 18px;letter-spacing:-.01em}
+  h3{font-family:var(--serif);font-weight:600;font-size:21px;margin:32px 0 10px}
+  p{margin:0 0 16px}
+  a{color:var(--teal);text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
+  strong{font-weight:600}
+  code{font-family:var(--mono);font-size:.86em;background:var(--paper3);padding:2px 6px;border-radius:5px;border:1px solid var(--line)}
+  .lead{font-size:19px;color:var(--ink2)}
+
+  .box{border-radius:var(--radius);padding:18px 20px;margin:20px 0;border:1px solid var(--line2)}
+  .box .lab{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:500;display:inline-block;margin-bottom:8px}
+  .box p:last-child{margin-bottom:0}
+  .analogy{background:var(--amber-bg);border-color:#e8d6a6}.analogy .lab{color:var(--amber-ink)}
+  .fact{background:var(--teal-bg);border-color:#bcdcd4}.fact .lab{color:var(--teal-ink)}
+  .trap{background:var(--red-bg);border-color:#e6bdb2}.trap .lab{color:var(--red)}
+  .recall{background:var(--purple-bg);border-color:#cdc8ee}.recall .lab{color:var(--purple-ink)}
+  .diffuse{background:var(--paper2);border-color:var(--line2);border-style:dashed}.diffuse .lab{color:var(--ink2)}
+  .conf{font-size:13.5px;color:var(--ink2);font-style:italic;border-left:3px solid var(--line2);padding:2px 0 2px 14px;margin:16px 0}
+
+  pre.ascii{font-family:var(--mono);font-size:12.5px;line-height:1.45;background:#272521;color:#e9e3d4;padding:18px 20px;border-radius:var(--radius);overflow-x:auto;margin:20px 0;border:1px solid #1a1814}
+  pre.ascii .c{color:#7fd3c0}.ascii .o{color:#e9a06a}.ascii .d{color:#888377}
+
+  .tbl{overflow-x:auto;margin:20px 0;border-radius:var(--radius);border:1px solid var(--line2)}
+  table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--paper2)}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;background:var(--paper3);color:var(--ink2);font-weight:500}
+  tr:last-child td{border-bottom:none}
+
+  figure{margin:24px 0;background:var(--paper2);border:1px solid var(--line2);border-radius:var(--radius);padding:20px}
+  figure svg{display:block;width:100%;height:auto}
+  figcaption{font-size:13.5px;color:var(--ink2);margin-top:12px;font-style:italic}
+  .svgt{font-family:var(--sans);font-size:12px;font-weight:600;fill:var(--ink)}
+  .svgts{font-family:var(--sans);font-size:10px;fill:var(--ink2)}
+  .svgm{font-family:var(--mono);font-size:9.5px;fill:var(--ink2)}
+
+  /* token flow animation */
+  .tok circle{fill:var(--purple)}
+  .tokA{animation:mA 2.2s linear infinite}
+  .tokB{animation:mB 2.4s linear infinite}
+  .tokC{animation:mC 2.6s linear infinite}
+  @keyframes mA{from{transform:translateX(0)}to{transform:translateX(86px)}}
+  @keyframes mB{from{transform:translateX(0)}to{transform:translateX(116px)}}
+  @keyframes mC{from{transform:translateX(0)}to{transform:translateX(104px)}}
+  .slot{fill:var(--paper3);stroke:var(--line2)}
+  .slot.busy{fill:var(--teal-bg);stroke:var(--teal);animation:pulse 2.2s ease-in-out infinite}
+  .slot.busy2{fill:var(--coral-bg);stroke:var(--coral);animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+
+  /* backpressure: waiting tokens bob, busy slots pulse */
+  .wait{animation:bob 1.6s ease-in-out infinite}
+  .wait:nth-of-type(2){animation-delay:.4s}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+
+  /* transaction-mode swap: three mapping lines fade in turn */
+  .swap{stroke-width:2.5;fill:none;opacity:.18}
+  .swapA{stroke:var(--coral);animation:sw 5.4s ease-in-out infinite}
+  .swapB{stroke:var(--coral);animation:sw 5.4s ease-in-out infinite;animation-delay:1.8s}
+  .swapC{stroke:var(--coral);animation:sw 5.4s ease-in-out infinite;animation-delay:3.6s}
+  @keyframes sw{0%,28%{opacity:1}33%,100%{opacity:.18}}
+  .swaptok{animation:swtok 5.4s ease-in-out infinite}
+  @keyframes swtok{0%,28%{opacity:1}33%,100%{opacity:0}}
+
+  /* JS-driven connection-flow simulator */
+  .cp-scroll{overflow-x:auto;margin:8px 0 6px}
+  .cp-stage{position:relative;height:340px;min-width:660px;background:var(--paper2);border:1px solid var(--line2);border-radius:var(--radius)}
+  .cp-zlabel{position:absolute;font-family:var(--mono);font-size:11px;color:var(--ink2);font-weight:500}
+  .cp-sub{position:absolute;font-family:var(--mono);font-size:10px;color:var(--ink2)}
+  .cp-thread{position:absolute;left:16px;width:60px;height:16px;border-radius:5px;background:var(--gray-bg);border:1px solid var(--line2)}
+  .cp-slot{position:absolute;left:118px;width:112px;height:44px;border-radius:8px;background:var(--paper3);border:1px solid var(--line2);transition:background .3s,border-color .3s}
+  .cp-slot.busy{border-color:transparent}
+  .cp-appsock{position:absolute;left:230px;width:100px;height:5px;border-radius:3px;background:var(--line2);transition:background .3s}
+  .cp-pooler{position:absolute;left:330px;top:44px;width:100px;height:262px;border-radius:10px;background:var(--purple-bg);border:1px solid var(--purple)}
+  .cp-srvsock{position:absolute;left:430px;width:110px;height:7px;border-radius:4px;background:var(--line2);transition:background .3s}
+  .cp-be{position:absolute;left:540px;width:112px;height:44px;border-radius:8px;background:var(--gray-bg);border:1px solid var(--line2);transition:background .3s}
+  .cp-be.busy{border-color:transparent}
+  .cp-slabel{position:absolute;font-family:var(--mono);font-size:10px;color:var(--ink2);pointer-events:none}
+  .cp-tok{position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;transition:transform .85s ease,opacity .45s;z-index:5;box-shadow:0 0 0 3px var(--paper2)}
+  .cp-tok.waiting{animation:cpwait 1s ease-in-out infinite}
+  @keyframes cpwait{0%,100%{opacity:1}50%{opacity:.35}}
+  .cp-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:13.5px;color:var(--ink2)}
+  .cp-btn{font-family:var(--mono);font-size:13px;background:var(--ink);color:var(--paper);border:none;padding:9px 18px;border-radius:9px;cursor:pointer}
+  .cp-btn:hover{background:var(--teal)}
+  .cp-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin-top:4px}
+  .cp-chip{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px;margin-right:5px}
+  .cp-bar{display:inline-block;width:22px;height:6px;border-radius:3px;vertical-align:1px;margin-right:5px;background:var(--line2)}
+
+  /* multiplexing: backend bar cycles colours (shared) vs stays locked (pinned) */
+  .mx-be{animation:mxcycle 6s infinite}
+  @keyframes mxcycle{0%,28%{fill:#7F77DD}33%,61%{fill:#1D9E75}66%,94%{fill:#D85A30}100%{fill:#7F77DD}}
+  .mx-f1{animation:mxf1 6s infinite}.mx-f2{animation:mxf2 6s infinite}.mx-f3{animation:mxf3 6s infinite}
+  @keyframes mxf1{0%,28%{opacity:1}30%,100%{opacity:.25}}
+  @keyframes mxf2{0%,32%{opacity:.25}33%,61%{opacity:1}63%,100%{opacity:.25}}
+  @keyframes mxf3{0%,65%{opacity:.25}66%,94%{opacity:1}96%,100%{opacity:.25}}
+  .faqitem{border-left:3px solid var(--coral);padding:2px 0 2px 16px;margin:18px 0}
+  .faqitem .q{font-weight:600;color:var(--ink);margin-bottom:4px}
+  .faqitem .src{font-size:12.5px;color:var(--ink2);font-style:italic}
+
+  footer{border-top:2px solid var(--ink);padding:26px 0 60px;font-size:13.5px;color:var(--ink2);margin-top:20px}
+  @media(prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important;scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <p class="kicker">Knowledge base &middot; Part 3 — Addendum</p>
+    <h1>Two-Layer Connection Pooling: <em>HikariCP + PgBouncer</em></h1>
+    <p class="lede">&ldquo;If PgBouncer is a connection pooler, do I still need an app-side pool like HikariCP?&rdquo; Yes — usually both. They pool different connections, on different sides of the wire, for different reasons.</p>
+    <span class="prevlink">&larr; Extends Part 3 §6 (PgBouncer) — read that first for the connection-storm setup</span>
+  </header>
+
+  <!-- 1 -->
+  <section>
+    <p class="num">01</p>
+    <h2>The big picture — two pools, two scopes</h2>
+    <p>Both are called &ldquo;connection pools,&rdquo; which is exactly why it&rsquo;s confusing. The difference is <em>where they live</em> and <em>what they pool</em>:</p>
+    <pre class="ascii">   ┌──────────── one app server (one JVM) ───────────┐
+   │   threads ──► <span class="c">HikariCP</span> ───┐                       │
+   │  (your code)  (pool of app↔proxy connections)    │
+   └──────────────────────────┼──────────────────────┘
+                              │   ...and 49 OTHER app servers do the same
+                              ▼
+                         [ <span class="o">PgBouncer</span> ] ───► Postgres
+                         (pool of proxy↔DB connections, shared by ALL apps)</pre>
+    <p><strong>HikariCP</strong> pools connections <em>inside one app process</em> — between your code&rsquo;s threads and whatever it dials. It lives in your JVM. <strong>PgBouncer</strong> pools connections <em>between many app processes and the database</em> — a separate server in front of Postgres. <em>(Sources: HikariCP — github.com/brettwooldridge/HikariCP; PgBouncer — pgbouncer.org. Confident.)</em></p>
+    <div class="box fact"><span class="lab">The dividing idea</span>
+      <p>They aren&rsquo;t duplicates stacked pointlessly — they pool at <strong>two different scopes</strong>. HikariCP is <em>per-process</em> (local). PgBouncer is <em>cluster-wide</em> (global). One optimizes your app&rsquo;s local access to connections; the other protects the database from the <em>sum</em> of all apps.</p>
+    </div>
+  </section>
+
+  <!-- 2 ANIMATION -->
+  <section>
+    <p class="num">02</p>
+    <h2>See it: the funnel</h2>
+    <p>Watch the request flow narrow at each pool. Many threads share a few app connections (HikariCP); many app connections share even fewer real database connections (PgBouncer). The funnel <em>is</em> the whole point.</p>
+
+    <figure>
+      <svg viewBox="0 0 720 280" role="img" aria-label="Animated pipeline: five app threads feed a HikariCP pool of three connections; those feed PgBouncer, which multiplexes onto two real Postgres backend connections shared across all app instances.">
+        <!-- threads -->
+        <text class="svgt" x="55" y="36" text-anchor="middle">threads</text>
+        <text class="svgts" x="55" y="50" text-anchor="middle">(your code)</text>
+        <circle cx="55" cy="72" r="7" fill="var(--purple)"/>
+        <circle cx="55" cy="104" r="7" fill="var(--purple)"/>
+        <circle cx="55" cy="136" r="7" fill="var(--purple)"/>
+        <circle cx="55" cy="168" r="7" fill="var(--purple)"/>
+        <circle cx="55" cy="200" r="7" fill="var(--purple)"/>
+
+        <!-- HikariCP pool -->
+        <rect x="138" y="56" width="116" height="168" rx="10" fill="var(--teal-bg)" stroke="var(--teal)"/>
+        <text class="svgt" x="196" y="78" text-anchor="middle" fill="var(--teal-ink)">HikariCP</text>
+        <text class="svgm" x="196" y="93" text-anchor="middle">app-side · pool = 3</text>
+        <rect class="slot busy" x="166" y="108" width="60" height="20" rx="5"/>
+        <rect class="slot busy" x="166" y="138" width="60" height="20" rx="5" style="animation-delay:.7s"/>
+        <rect class="slot busy" x="166" y="168" width="60" height="20" rx="5" style="animation-delay:1.4s"/>
+        <text class="svgm" x="196" y="210" text-anchor="middle">per app instance</text>
+
+        <!-- PgBouncer pool -->
+        <rect x="386" y="80" width="116" height="120" rx="10" fill="var(--amber-bg)" stroke="var(--amber)"/>
+        <text class="svgt" x="444" y="102" text-anchor="middle" fill="var(--amber-ink)">PgBouncer</text>
+        <text class="svgm" x="444" y="117" text-anchor="middle">proxy · pool = 2</text>
+        <rect class="slot busy2" x="414" y="132" width="60" height="20" rx="5"/>
+        <rect class="slot busy2" x="414" y="160" width="60" height="20" rx="5" style="animation-delay:1.1s"/>
+
+        <!-- Postgres -->
+        <rect x="600" y="104" width="100" height="72" rx="10" fill="var(--gray-bg)" stroke="var(--line2)"/>
+        <text class="svgt" x="650" y="135" text-anchor="middle">Postgres</text>
+        <text class="svgm" x="650" y="152" text-anchor="middle">the kitchen</text>
+
+        <!-- "x50" note feeding PgBouncer -->
+        <text class="svgts" x="320" y="232" text-anchor="middle">&times; 50 app instances all feed PgBouncer &rarr;</text>
+
+        <!-- moving tokens: stage A (threads -> hikari) -->
+        <g class="tok tokA"><circle cx="68" cy="72" r="5"/></g>
+        <g class="tok tokA" style="animation-delay:.4s"><circle cx="68" cy="104" r="5"/></g>
+        <g class="tok tokA" style="animation-delay:.8s"><circle cx="68" cy="136" r="5"/></g>
+        <g class="tok tokA" style="animation-delay:1.2s"><circle cx="68" cy="168" r="5"/></g>
+        <g class="tok tokA" style="animation-delay:1.6s"><circle cx="68" cy="200" r="5"/></g>
+
+        <!-- stage B (hikari -> pgbouncer) -->
+        <g class="tok tokB"><circle cx="262" cy="118" r="5"/></g>
+        <g class="tok tokB" style="animation-delay:.8s"><circle cx="262" cy="148" r="5"/></g>
+        <g class="tok tokB" style="animation-delay:1.6s"><circle cx="262" cy="178" r="5"/></g>
+
+        <!-- stage C (pgbouncer -> postgres) -->
+        <g class="tok tokC"><circle cx="510" cy="142" r="5"/></g>
+        <g class="tok tokC" style="animation-delay:1.3s"><circle cx="510" cy="170" r="5"/></g>
+      </svg>
+      <figcaption>5 threads &rarr; 3 app connections (HikariCP) &rarr; 2 real DB connections (PgBouncer). Now read the small print: &times;50 app instances each open ~3 connections to PgBouncer — and PgBouncer collapses all 150 down to its tiny real-DB pool. That second collapse is the job HikariCP physically cannot do.</figcaption>
+    </figure>
+    <div class="conf">The animation is illustrative — pool sizes (3, 2) and instance count (50) are example numbers chosen for legibility, not defaults. Real pool sizing is workload-specific; tune against measured active-query counts, not guesses.</div>
+  </section>
+
+  <!-- 3 WHY HIKARI -->
+  <section>
+    <p class="num">03</p>
+    <h2>Why you keep the app-side pool anyway</h2>
+    <p>The reason people <em>think</em> PgBouncer makes HikariCP redundant: &ldquo;they&rsquo;re both pools.&rdquo; But the app-side pool does three jobs PgBouncer cannot, because it lives <em>where your code runs</em>:</p>
+    <h3>1 · It makes &ldquo;get a connection&rdquo; free on the hot path</h3>
+    <p>Without an app-side pool, every query does a fresh TCP connect + (if TLS) handshake + auth — even just to reach PgBouncer. With HikariCP, a thread grabs an already-open connection from a local pool in microseconds. Making connection-acquisition essentially free from the app&rsquo;s point of view is HikariCP&rsquo;s entire reason to exist.</p>
+    <h3>2 · It bounds and queues your app&rsquo;s own concurrency</h3>
+    <p>Pool size is a backpressure valve: set max = 20 and your app will never run more than 20 queries at once — the 21st thread waits locally. That protects your app from spawning unbounded DB work and shields everything downstream. PgBouncer can&rsquo;t apply this limit <em>per app instance</em>.</p>
+
+    <figure>
+      <svg viewBox="0 0 680 200" role="img" aria-label="Five threads want the database, but the pool has only three connection slots. Three threads are busy in slots; two extra threads wait in a queue until a slot frees.">
+        <text class="svgt" x="70" y="28" text-anchor="middle">threads waiting</text>
+        <text class="svgts" x="70" y="44" text-anchor="middle">(pool is full)</text>
+        <!-- waiting (queued) tokens -->
+        <g class="wait"><circle cx="55" cy="100" r="9" fill="var(--purple)"/><text x="55" y="104" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="#fff">4</text></g>
+        <g class="wait"><circle cx="55" cy="135" r="9" fill="var(--purple)"/><text x="55" y="139" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="#fff">5</text></g>
+        <text class="svgm" x="55" y="166" text-anchor="middle" fill="var(--coral-ink)">blocked, waiting</text>
+
+        <line x1="78" y1="117" x2="172" y2="117" stroke="var(--line2)" stroke-width="1.5" stroke-dasharray="4 4"/>
+
+        <!-- the pool: 3 slots, all busy -->
+        <rect x="180" y="56" width="200" height="120" rx="10" fill="var(--teal-bg)" stroke="var(--teal)"/>
+        <text class="svgt" x="280" y="48" text-anchor="middle" fill="var(--teal-ink)">HikariCP pool · max = 3</text>
+        <rect x="204" y="76" width="152" height="24" rx="6" class="slot busy"/>
+        <text x="280" y="92" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--teal-ink)">slot 1 · thread 1 (busy)</text>
+        <rect x="204" y="108" width="152" height="24" rx="6" class="slot busy" style="animation-delay:.7s"/>
+        <text x="280" y="124" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--teal-ink)">slot 2 · thread 2 (busy)</text>
+        <rect x="204" y="140" width="152" height="24" rx="6" class="slot busy" style="animation-delay:1.4s"/>
+        <text x="280" y="156" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--teal-ink)">slot 3 · thread 3 (busy)</text>
+
+        <line x1="382" y1="116" x2="470" y2="116" stroke="var(--teal)" stroke-width="1.5" marker-end="url(#bpar)"/>
+        <defs><marker id="bpar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--teal)" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+        <rect x="476" y="92" width="180" height="48" rx="10" fill="var(--gray-bg)" stroke="var(--line2)"/>
+        <text class="svgt" x="566" y="113" text-anchor="middle">database</text>
+        <text class="svgm" x="566" y="129" text-anchor="middle">never sees &gt; 3 at once</text>
+      </svg>
+      <figcaption>The valve in action: 5 threads want the DB, but a pool capped at 3 lets only 3 run at once. Threads 4 and 5 wait <em>locally</em> (bobbing) until a slot frees — so the database never sees more than 3 concurrent queries from this instance. That cap is exactly what an external pooler can&rsquo;t enforce per app instance.</figcaption>
+    </figure>
+
+    <h3>3 · It&rsquo;s the integration point with your framework</h3>
+    <p>Your ORM/driver (Spring, Hibernate, etc.) expects a <code>DataSource</code> that hands out connections — that&rsquo;s HikariCP&rsquo;s slot. PgBouncer is invisible to your code; it just looks like &ldquo;the database.&rdquo;</p>
+
+    <div class="box trap"><span class="lab">Name the trap &middot; &ldquo;both are pools, so one is redundant&rdquo;</span>
+      <p>They pool at different layers for different reasons. HikariCP optimizes the <em>app&rsquo;s local access</em> (latency, backpressure, framework integration). PgBouncer optimizes the <em>database&rsquo;s global connection count</em>. Drop HikariCP and every query pays a fresh connect cost to reach PgBouncer — you&rsquo;d hammer it with connect/disconnect churn. Drop PgBouncer and the DB sees the <em>sum</em> of every app&rsquo;s pool. <strong>They protect different victims.</strong></p>
+    </div>
+  </section>
+
+  <!-- 4 ANALOGY + NUMBERS -->
+  <section>
+    <p class="num">04</p>
+    <h2>The analogy, and the numbers that prove it</h2>
+    <div class="box analogy"><span class="lab">Analogy</span>
+      <p>The database is the kitchen, with a hard cap on chefs. <strong>HikariCP is one restaurant branch&rsquo;s own roster of waiters</strong> — Branch A keeps 20 on staff so its guests never wait for someone to be hired and trained mid-service (local efficiency). <strong>PgBouncer is the shared head-office scheduler</strong> all branches route through, keeping the <em>total</em> chefs the kitchen must staff sane — because if A wants 20, B wants 20, C wants 20… the kitchen would need 60 chefs it can&rsquo;t afford.</p>
+    </div>
+    <p>The analogy makes the key fact obvious: <strong>with many app instances, the app-side pools add up.</strong></p>
+    <pre class="ascii">   50 instances  x  HikariCP max 20  =  <span class="o">1000 connections demanded of Postgres</span>
+                                          (the connection storm from Part 3 again)
+
+   HikariCP alone CAN'T fix this — no single instance knows about the others.
+   <span class="c">PgBouncer collapses that 1000 down to ~20 real backends.</span></pre>
+    <div class="box fact"><span class="lab">The clean split</span>
+      <p><strong>HikariCP</strong> solves: &ldquo;this <em>one</em> app instance accesses connections fast and bounded.&rdquo; <strong>PgBouncer</strong> solves: &ldquo;the <em>sum</em> of all instances doesn&rsquo;t melt the database.&rdquo; Different scopes — so you typically want both.</p>
+    </div>
+    <div class="box recall"><span class="lab">Retrieve it</span>
+      <p>In one sentence each: what victim does HikariCP protect, and what victim does PgBouncer protect? (One is &ldquo;this app instance,&rdquo; one is &ldquo;the database as a whole.&rdquo;)</p>
+    </div>
+  </section>
+
+  <!-- 5 WHAT EACH CONNECTION IS -->
+  <section>
+    <p class="num">05</p>
+    <h2>What each connection actually is — watch the flow</h2>
+    <p class="lead">The hidden assumption that makes this confusing: you picture <em>one</em> pipe running from a thread all the way to the database. That pipe does not exist. There&rsquo;s a chain of <strong>separate, independently-counted links</strong>, and a pooler&rsquo;s whole job is to break the 1-to-1 between them.</p>
+    <p>Every link below that is a socket is a <strong>real TCP socket</strong> — a real OS file descriptor (the same FDs from Part 1). Nothing is virtual. &ldquo;Pooled&rdquo; doesn&rsquo;t mean fake; it means <em>kept open and reused</em>. A socket is only ever in one of two states: <strong>in use</strong> (a query is flowing through it) or <strong>idle but open</strong> (kept warm, costing almost nothing).</p>
+
+    <p>Press play. Each coloured dot is one query. Watch the three boundaries — and watch the two database sockets change colour as different queries take turns on them (that colour-swap <em>is</em> time-sharing).</p>
+
+    <div class="cp-scroll">
+      <div class="cp-stage" id="cpStage">
+        <div class="cp-zlabel" style="left:14px;top:8px">worker threads</div>
+        <div class="cp-sub" style="left:14px;top:24px">(many)</div>
+        <div class="cp-zlabel" style="left:118px;top:8px">HikariCP pool</div>
+        <div class="cp-sub" style="left:118px;top:24px">4 real sockets</div>
+        <div class="cp-zlabel" style="left:344px;top:8px">PgBouncer</div>
+        <div class="cp-zlabel" style="left:548px;top:8px">Postgres</div>
+        <div class="cp-sub" style="left:548px;top:24px">2 backends</div>
+
+        <div class="cp-thread" style="top:50px"></div>
+        <div class="cp-thread" style="top:95px"></div>
+        <div class="cp-thread" style="top:140px"></div>
+        <div class="cp-thread" style="top:185px"></div>
+        <div class="cp-thread" style="top:230px"></div>
+        <div class="cp-thread" style="top:275px"></div>
+
+        <div class="cp-slot" style="top:56px"></div>
+        <div class="cp-slot" style="top:120px"></div>
+        <div class="cp-slot" style="top:184px"></div>
+        <div class="cp-slot" style="top:248px"></div>
+        <div class="cp-slabel" style="left:128px;top:71px">conn 1</div>
+        <div class="cp-slabel" style="left:128px;top:135px">conn 2</div>
+        <div class="cp-slabel" style="left:128px;top:199px">conn 3</div>
+        <div class="cp-slabel" style="left:128px;top:263px">conn 4</div>
+
+        <div class="cp-appsock" style="top:76px"></div>
+        <div class="cp-appsock" style="top:140px"></div>
+        <div class="cp-appsock" style="top:204px"></div>
+        <div class="cp-appsock" style="top:268px"></div>
+
+        <div class="cp-pooler"></div>
+        <div class="cp-sub" style="left:352px;top:150px">routes to a</div>
+        <div class="cp-sub" style="left:352px;top:164px">free server</div>
+        <div class="cp-sub" style="left:352px;top:178px">socket</div>
+
+        <div class="cp-srvsock" style="top:127px"></div>
+        <div class="cp-srvsock" style="top:207px"></div>
+        <div class="cp-slabel" style="left:452px;top:108px">socket 1</div>
+        <div class="cp-slabel" style="left:452px;top:188px">socket 2</div>
+
+        <div class="cp-be" style="top:108px"></div>
+        <div class="cp-be" style="top:188px"></div>
+        <div class="cp-slabel" style="left:556px;top:123px">backend 1</div>
+        <div class="cp-slabel" style="left:556px;top:203px">backend 2</div>
+      </div>
+    </div>
+    <div class="cp-controls">
+      <button class="cp-btn" id="cpPlay">&#9654;&nbsp; Play</button>
+      <span>database sockets in use: <b id="cpUsage" style="color:var(--ink)">0 / 2</b></span>
+    </div>
+    <div class="cp-legend">
+      <span><span class="cp-chip" style="background:#7F77DD"></span>a query (coloured per app connection)</span>
+      <span><span class="cp-bar"></span>socket open but idle</span>
+      <span><span class="cp-bar" style="background:#1D9E75"></span>socket carrying a query now</span>
+    </div>
+
+    <h3>Reading the three boundaries</h3>
+    <p><strong>Boundary 1 — threads borrow from the pool (no socket).</strong> A thread doesn&rsquo;t own a connection; it <em>leases</em> one of the 4 pool sockets for the length of a query, then returns it. That checkout happens inside the JVM — no network, no socket. So &ldquo;the app has many connections&rdquo; is loose talk: it has many <em>threads</em> competing for a <em>capped</em> set of sockets.</p>
+    <p><strong>Boundary 2 — HikariCP &harr; PgBouncer (real sockets, one socket / two names).</strong> Each of the 4 lines is one real TCP socket. From HikariCP&rsquo;s end it&rsquo;s &ldquo;a pooled connection&rdquo;; from PgBouncer&rsquo;s end the <em>same socket</em> is &ldquo;a client connection.&rdquo; One wire, two names. Per instance that&rsquo;s 20 in the real scenario; &times;10 instances = ~200 arriving at PgBouncer.</p>
+    <p><strong>Boundary 3 — PgBouncer &harr; Postgres (fewer real sockets, time-shared).</strong> Different, separate sockets — and far fewer. A query holds one only <em>while its transaction runs</em>; on commit it&rsquo;s released for the next query from <em>any</em> client. Watch a server socket go blue for one query, free, then green for another — that reuse is why ~200 client sockets need only ~25 server sockets: at any instant only ~25 queries are actually executing.</p>
+
+    <div class="box trap"><span class="lab">Name the trap</span>
+      <p>There is no single end-to-end pipe. PgBouncer holds <strong>two independent sets of real sockets</strong> — ~200 on its client side, ~25 on its server side — because it deliberately refuses to keep them 1-to-1. &ldquo;The app has more, the pooler has fewer&rdquo; just means: more client-side sockets than server-side sockets, on the same box. Everything is a real socket; the only magic is <em>reuse</em> (pooling) and <em>time-sharing</em> (the scarce server side).</p>
+    </div>
+
+    <h3>The bridge model — who opens the &ldquo;real&rdquo; connection</h3>
+    <p>A common follow-on confusion: &ldquo;so the app&rsquo;s connections aren&rsquo;t real DB connections, only PgBouncer&rsquo;s are?&rdquo; Not quite. A database connection is a <strong>TCP socket + an authenticated database-protocol session</strong>. The trick is that PgBouncer <strong>speaks the PostgreSQL wire protocol on both sides</strong> — it impersonates Postgres to your app (does the login handshake, accepts SQL) and acts as a client to the real Postgres on the other side. So the app&harr;PgBouncer link <em>is</em> a genuine, authenticated DB session; it simply <strong>terminates at PgBouncer</strong> instead of at Postgres. <em>(Source: pgbouncer.org. Confident.)</em></p>
+    <div class="box analogy"><span class="lab">This is the TLS-bridging pattern again</span>
+      <p>Exactly like an L7 proxy that <em>terminates</em> TLS and <em>re-originates</em> a new encrypted session to the backend (Part 2), PgBouncer terminates your DB session and re-originates its own session to a real backend it manages. So your instinct &ldquo;PgBouncer opens the real DB connections&rdquo; is <strong>correct</strong> if &ldquo;real&rdquo; means <em>the backend connection to actual Postgres</em>. The fix to the mental model: the app&rsquo;s connection isn&rsquo;t a bare socket — it&rsquo;s a real DB session to the bridge. <em>(ProxySQL does the identical thing in the MySQL protocol.)</em></p>
+    </div>
+    <p>One consequence you may have hit: in transaction pooling mode, when HikariCP opens its connections at startup, PgBouncer authenticates those client sessions but does <strong>not</strong> necessarily open a backend per client — it grabs a backend only when a transaction actually runs, releasing it on commit. So you can have many warm client sessions and only a few backend sessions behind them. That gap <em>is</em> the decoupling, made literal. <em>(Source: pgbouncer.org, pooling modes. Confident.)</em></p>
+
+    <h3>Why the app &ldquo;complains&rdquo; at startup if the DB is unreachable</h3>
+    <p>This is the proof these are real sessions, not bare sockets. HikariCP defaults to <strong>fail-fast</strong>: <code>initializationFailTimeout</code> defaults to <strong>1&nbsp;ms</strong>, meaning at construction it tries to acquire <em>and validate</em> one initial connection, and if it can&rsquo;t, it throws and the pool/app fails to start. A bare TCP socket wouldn&rsquo;t do this — the complaint happens precisely because HikariCP must establish a <em>valid, authenticated DB session</em> (it validates via JDBC4 <code>isValid()</code> by default). <em>(Source: HikariCP README + DeepWiki config docs. Confident; exact eager-prefill-to-<code>minimumIdle</code> behavior varies by version — verify.)</em></p>
+
+    <div class="box recall"><span class="lab">Retrieve it</span>
+      <p>At a random instant your 200 client sockets are open but PgBouncer keeps 25 server sockets. Roughly how many of the 200 are tied to a server socket right now — and what are the other ~175 doing that makes it safe for them to hold no server socket?</p>
+    </div>
+  </section>
+
+  <!-- 6 PGBOUNCER LIMITS -->
+  <section>
+    <p class="num">06</p>
+    <h2>Inside PgBouncer: the limits, and the waiting queue</h2>
+    <p class="lead">Two questions fall out of the bridge model: when more queries arrive than there are backend connections, what happens? And who actually sets &ldquo;the number of connections&rdquo;?</p>
+
+    <h3>Extra queries wait — but be precise about <em>what</em> waits</h3>
+    <p>When every backend connection in a pool is busy, an incoming query <strong>queues</strong> until one frees up. The precise part: the client connection stays fully connected to PgBouncer the whole time — it&rsquo;s the <em>query/transaction</em> that&rsquo;s parked, not the connection that&rsquo;s dropped. The wait is bounded by <code>query_wait_timeout</code> (default <strong>120&nbsp;s</strong>); exceed it and the query is cancelled with an error. An optional <strong>reserve pool</strong> (<code>reserve_pool_size</code>) opens a few extra backends for bursts after a query has waited <code>reserve_pool_timeout</code> seconds. You can watch it live: <code>SHOW POOLS</code> exposes <code>cl_waiting</code> (queued clients) and <code>maxwait</code> (oldest waiter). <em>(Source: pgbouncer.org config; OneUptime PgBouncer guide. Confident.)</em></p>
+
+    <h3>Who sets the numbers — you do, in <code>pgbouncer.ini</code></h3>
+    <p>There are two different numbers, mapping onto the two sides of the bridge:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Parameter</th><th>Governs</th><th>Default</th><th>Side</th></tr></thead>
+      <tbody>
+        <tr><td><code>max_client_conn</code></td><td>total <strong>client</strong> connections accepted</td><td>100</td><td>the &ldquo;many&rdquo; side</td></tr>
+        <tr><td><code>default_pool_size</code></td><td>real <strong>backend</strong> connections per pool <em>(one pool = one user+database pair)</em></td><td>20</td><td>the &ldquo;few&rdquo; side</td></tr>
+        <tr><td><code>min_pool_size</code></td><td>backends kept warm when idle</td><td>0</td><td>few</td></tr>
+        <tr><td><code>reserve_pool_size</code></td><td>extra backends for bursts</td><td>0</td><td>few</td></tr>
+        <tr><td><code>max_db_connections</code></td><td>hard cap on backends to one database</td><td>0 (unlimited)</td><td>few</td></tr>
+        <tr><td><code>max_user_connections</code></td><td>cap on backends for one user</td><td>0 (unlimited)</td><td>few</td></tr>
+      </tbody>
+    </table></div>
+    <p>So &ldquo;the number of real DB connections open at a time&rdquo; is set by <code>default_pool_size</code>, fenced by <code>max_db_connections</code>, with <code>reserve_pool_size</code> as a burst valve. The number of <em>clients</em> allowed is the separate <code>max_client_conn</code>. <em>(Source: pgbouncer.org config; <code>default_pool_size</code>=20 corroborated by Crunchy/DZone. Confident on the named params and on 20 / 100 / 120&nbsp;s; confirm reserve/min defaults with <code>SHOW CONFIG</code> on your build.)</em></p>
+
+    <figure>
+      <svg viewBox="0 0 680 270" role="img" aria-label="Nested connection limits: max_client_conn governs clients accepted; inside the database, Postgres max_connections is the hard ceiling, max_db_connections caps PgBouncer per database, and default_pool_size plus reserve_pool_size set the per-pool backend count.">
+        <rect x="20" y="80" width="150" height="120" rx="10" fill="var(--purple-bg)" stroke="var(--purple)"/>
+        <text class="svgt" x="95" y="118" text-anchor="middle" fill="var(--purple-ink)">clients</text>
+        <text class="svgm" x="95" y="138" text-anchor="middle">max_client_conn</text>
+        <text class="svgm" x="95" y="152" text-anchor="middle">default 100</text>
+        <line x1="170" y1="140" x2="306" y2="140" stroke="var(--ink2)" stroke-width="1.5" marker-end="url(#nlar)"/>
+        <text class="svgm" x="238" y="132" text-anchor="middle">queue if full</text>
+        <defs><marker id="nlar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--ink2)" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+
+        <rect x="312" y="36" width="346" height="208" rx="12" fill="none" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text class="svgt" x="485" y="56" text-anchor="middle" fill="var(--red)">Postgres max_connections &mdash; hard ceiling</text>
+        <text class="svgm" x="485" y="70" text-anchor="middle">(set in postgresql.conf)</text>
+        <rect x="336" y="84" width="298" height="142" rx="10" fill="var(--amber-bg)" stroke="var(--amber)"/>
+        <text class="svgts" x="485" y="104" text-anchor="middle" fill="var(--amber-ink)">max_db_connections &middot; per database</text>
+        <rect x="362" y="120" width="246" height="90" rx="9" fill="var(--teal-bg)" stroke="var(--teal)"/>
+        <text class="svgts" x="485" y="150" text-anchor="middle" fill="var(--teal-ink)">default_pool_size &middot; per pool</text>
+        <text class="svgm" x="485" y="170" text-anchor="middle" fill="var(--teal-ink)">+ reserve_pool_size for bursts</text>
+        <text class="svgm" x="485" y="190" text-anchor="middle" fill="var(--teal-ink)">these are the real backend sockets</text>
+      </svg>
+      <figcaption>The limits nest. <code>default_pool_size</code> (per pool) sits inside <code>max_db_connections</code> (per database), which must sit under Postgres&rsquo;s own <code>max_connections</code> — the hard wall above every pool and every PgBouncer instance combined.</figcaption>
+    </figure>
+
+    <div class="box trap"><span class="lab">Name the trap &middot; <code>default_pool_size</code> is per pool, not global</span>
+      <p>A &ldquo;pool&rdquo; is one <em>(user, database)</em> pair. Ten databases each getting 20 backends is up to 200 — which can blow past Postgres&rsquo;s <code>max_connections</code>. That&rsquo;s what <code>max_db_connections</code> and <code>max_user_connections</code> fence in. The true ceiling above everything is Postgres <code>max_connections</code>; PgBouncer&rsquo;s job is to keep the sum of all its pools under it.</p>
+    </div>
+    <p>How to <em>pick</em> <code>default_pool_size</code>? It&rsquo;s the Little&rsquo;s-Law point from earlier: roughly <strong>peak concurrent transactions &times; average transaction time</strong>. One worked example: 500 req/s &times; 20&nbsp;ms &asymp; 10 connections, plus headroom to ~15&ndash;20. <em>(Source: OneUptime — a rule of thumb; measure your real <code>avg_query_time</code> via <code>SHOW STATS</code> rather than trusting the formula blindly.)</em></p>
+  </section>
+
+  <!-- 7 PGBOUNCER VS PROXYSQL -->
+  <section>
+    <p class="num">07</p>
+    <h2>PgBouncer vs ProxySQL: both pool, one also routes</h2>
+    <p class="lead">The misconception to kill: &ldquo;PgBouncer limits connections, ProxySQL splits read/write, so the connection count stays the same on ProxySQL.&rdquo; No — ProxySQL pools and multiplexes <em>too</em>. Read/write splitting is something it does <em>on top of</em> pooling, not instead of it.</p>
+
+    <p>ProxySQL&rsquo;s connection multiplexing is a core feature, <strong>on by default</strong>: many frontend connections share a small set of backend connections. The docs put it plainly — many client connections (tens of thousands) can use a few backend connections (a few hundred); a backend is returned to the pool when a <em>request completes</em>, not when the client disconnects, provided it can be safely reused. MySQL is &ldquo;thread per connection&rdquo; like Postgres, so collapsing connections matters just as much. <em>(Source: proxysql.com — Multiplexing, MySQL Connection Pooling, FAQ. Confident.)</em></p>
+
+    <div class="tbl"><table>
+      <thead><tr><th></th><th>PgBouncer</th><th>ProxySQL</th></tr></thead>
+      <tbody>
+        <tr><td>Connection pooling / multiplexing</td><td class="ok">yes</td><td class="ok">yes (also collapses many&rarr;few)</td></tr>
+        <tr><td>Read/write split, query routing</td><td class="no">no</td><td class="ok">yes</td></tr>
+        <tr><td>Query caching, rewriting, firewall</td><td class="no">no</td><td class="ok">yes</td></tr>
+        <tr><td>Database family</td><td>PostgreSQL</td><td>MySQL / MariaDB family</td></tr>
+      </tbody>
+    </table></div>
+    <p>So ProxySQL is a <strong>superset on the routing side</strong>: it does everything a pooler does, plus query-aware routing. PgBouncer deliberately stays minimal. And they live in <strong>different ecosystems</strong> — PgBouncer is Postgres-only, ProxySQL is MySQL-family. You pick the one matching your DB; you don&rsquo;t normally chain them. (The &ldquo;three tiers&rdquo; in Part 3 were a ladder of <em>how much intelligence a proxy has</em>, not a literal stack. For Postgres read/write routing you&rsquo;d reach for Pgpool-II or PgCat, not PgBouncer + ProxySQL.)</p>
+
+    <h3>When multiplexing switches off (and why it&rsquo;s the same rule as PgBouncer)</h3>
+    <p>A backend can only be shared while it&rsquo;s <strong>stateless</strong>. ProxySQL <em>pins</em> a backend to one frontend whenever the session carries state that mustn&rsquo;t leak: an active transaction (pinned until commit/rollback), <code>autocommit=0</code>, user-defined <code>@variables</code>, <code>LOCK TABLES</code>/<code>GET_LOCK()</code>, temp tables, and prepared statements. In fact, once a client prepares a statement via the binary protocol, ProxySQL gives it a dedicated backend — and long-lived prepared statements can pin connections, shrinking the effective pool so exhaustion hits <em>before</em> the configured max. That is the <strong>same underlying rule</strong> as PgBouncer&rsquo;s transaction-mode gotchas: a stateful connection can&rsquo;t be time-shared. <em>(Source: proxysql.com — Multiplexing, Prepared Statements. Confident.)</em></p>
+
+    <figure>
+      <svg viewBox="0 0 680 230" role="img" aria-label="Left: multiplexing on, one backend connection cycles through serving three frontend connections in turn. Right: multiplexing off, a transaction pins the backend to one frontend while the other two wait.">
+        <text class="svgt" x="170" y="28" text-anchor="middle" fill="var(--teal-ink)">multiplexing ON (clean)</text>
+        <circle class="mx-f1" cx="50" cy="70" r="9" fill="#7F77DD"/>
+        <circle class="mx-f2" cx="50" cy="110" r="9" fill="#1D9E75"/>
+        <circle class="mx-f3" cx="50" cy="150" r="9" fill="#D85A30"/>
+        <line x1="62" y1="70" x2="230" y2="106" stroke="var(--line2)" stroke-width="1"/>
+        <line x1="62" y1="110" x2="230" y2="110" stroke="var(--line2)" stroke-width="1"/>
+        <line x1="62" y1="150" x2="230" y2="114" stroke="var(--line2)" stroke-width="1"/>
+        <rect class="mx-be" x="232" y="100" width="74" height="20" rx="5" fill="#7F77DD"/>
+        <text class="svgm" x="170" y="190" text-anchor="middle">1 backend serves all 3 in turn</text>
+
+        <line x1="340" y1="40" x2="340" y2="200" stroke="var(--line2)" stroke-width="1" stroke-dasharray="4 4"/>
+
+        <text class="svgt" x="510" y="28" text-anchor="middle" fill="var(--coral-ink)">multiplexing OFF (pinned)</text>
+        <circle cx="392" cy="70" r="9" fill="#7F77DD"/>
+        <circle cx="392" cy="110" r="9" fill="#888780" opacity="0.4"/>
+        <circle cx="392" cy="150" r="9" fill="#888780" opacity="0.4"/>
+        <line x1="404" y1="70" x2="572" y2="106" stroke="var(--coral)" stroke-width="2"/>
+        <line x1="404" y1="110" x2="500" y2="110" stroke="var(--line2)" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"/>
+        <line x1="404" y1="150" x2="500" y2="130" stroke="var(--line2)" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"/>
+        <rect x="574" y="100" width="74" height="20" rx="5" fill="#7F77DD"/>
+        <text class="svgm" x="510" y="178" text-anchor="middle">a transaction pins the backend</text>
+        <text class="svgm" x="510" y="194" text-anchor="middle">to one client; others wait</text>
+      </svg>
+      <figcaption>Left: a clean backend connection is time-shared — it cycles through serving each frontend, so many clients need few backends. Right: a transaction (or prepared statement, temp table, session var) pins the backend to one client until it&rsquo;s clean again; while pinned it can&rsquo;t be shared, which is why too many pinned sessions can exhaust the pool.</figcaption>
+    </figure>
+  </section>
+
+  <!-- 8 WHEN DROP ONE -->
+  <section>
+    <p class="num">08</p>
+    <h2>When you might genuinely drop one</h2>
+    <p>&ldquo;Always both&rdquo; is lazy. The honest edges:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Situation</th><th>App pool (HikariCP)</th><th>External pool (PgBouncer)</th></tr></thead>
+      <tbody>
+        <tr><td>Single app instance, low concurrency</td><td>Keep it</td><td>Often unneeded — the pools don&rsquo;t sum to anything dangerous</td></tr>
+        <tr><td>Many app instances hitting Postgres</td><td>Keep it</td><td><strong>Add it</strong> — collapses the summed connections</td></tr>
+        <tr><td>Serverless / massively horizontal (Lambda)</td><td>Nearly useless (ephemeral, can&rsquo;t reuse)</td><td><strong>Essential</strong> — instance count is huge &amp; spiky</td></tr>
+        <tr><td>Managed pooler already (RDS Proxy, Supabase)</td><td>Keep it</td><td>That slot is filled — don&rsquo;t add a second</td></tr>
+      </tbody>
+    </table></div>
+    <div class="conf">The serverless pattern (external pooler essential, app pool near-trivial) is well established in shape; verify the exact recommendation for your platform/runtime, as the specifics differ by provider.</div>
+  </section>
+
+  <!-- 9 CONFIG TRAP -->
+  <section>
+    <p class="num">09</p>
+    <h2>The configuration trap nobody warns you about</h2>
+    <p>Run both with PgBouncer in <strong>transaction pooling mode</strong> (the recommended default from Part 3) and there&rsquo;s a real interaction: HikariCP holds a connection open assuming it&rsquo;s a stable <em>session</em>, while PgBouncer reassigns the underlying backend <em>per transaction</em>. So anything session-scoped — a <code>SET</code>, a temp table, a server-side prepared statement — was created on one backend but your next transaction may land on a different one that&rsquo;s never seen it.</p>
+
+    <figure>
+      <svg viewBox="0 0 680 210" role="img" aria-label="One client connection through PgBouncer in transaction mode is mapped to a different backend for each transaction, so session state created on one backend is missing on the next.">
+        <rect x="270" y="14" width="140" height="44" rx="10" fill="var(--purple-bg)" stroke="var(--purple)"/>
+        <text class="svgt" x="340" y="34" text-anchor="middle" fill="var(--purple-ink)">your client conn</text>
+        <text class="svgm" x="340" y="49" text-anchor="middle">(thinks it has 1 session)</text>
+
+        <!-- three mapping lines, fading in turn -->
+        <path class="swap swapA" d="M320 58 C 250 110, 170 120, 130 150"/>
+        <path class="swap swapB" d="M340 58 C 340 110, 340 120, 340 150"/>
+        <path class="swap swapC" d="M360 58 C 430 110, 510 120, 550 150"/>
+        <g class="swaptok"><circle cx="130" cy="150" r="5" fill="var(--coral)"/></g>
+        <g class="swaptok" style="animation-delay:1.8s"><circle cx="340" cy="150" r="5" fill="var(--coral)"/></g>
+        <g class="swaptok" style="animation-delay:3.6s"><circle cx="550" cy="150" r="5" fill="var(--coral)"/></g>
+
+        <rect x="70" y="150" width="120" height="44" rx="9" fill="var(--gray-bg)" stroke="var(--line2)"/>
+        <text class="svgts" x="130" y="170" text-anchor="middle">backend A</text>
+        <text class="svgm" x="130" y="185" text-anchor="middle">SET x=1 lives here</text>
+        <rect x="280" y="150" width="120" height="44" rx="9" fill="var(--gray-bg)" stroke="var(--line2)"/>
+        <text class="svgts" x="340" y="170" text-anchor="middle">backend B</text>
+        <text class="svgm" x="340" y="185" text-anchor="middle">x is unset here</text>
+        <rect x="490" y="150" width="120" height="44" rx="9" fill="var(--gray-bg)" stroke="var(--line2)"/>
+        <text class="svgts" x="550" y="170" text-anchor="middle">backend C</text>
+        <text class="svgm" x="550" y="185" text-anchor="middle">x is unset here</text>
+
+        <text class="svgm" x="340" y="108" text-anchor="middle" fill="var(--coral-ink)">transaction 1 → A · transaction 2 → B · transaction 3 → C</text>
+      </svg>
+      <figcaption>Transaction pooling reassigns the backend each transaction. A session variable or temp table created in transaction 1 (on backend A) simply isn&rsquo;t there in transaction 2 (on backend B). The app <em>thinks</em> it has one stable session; it doesn&rsquo;t.</figcaption>
+    </figure>
+
+    <div class="box trap"><span class="lab">Name the trap — and the version that changed it</span>
+      <p><strong>Prepared statements were the classic casualty</strong> — but this is exactly the kind of claim that goes stale, so here&rsquo;s the version-accurate picture. <strong>Before PgBouncer 1.21</strong> (Oct 2023), prepared statements only worked in <em>session</em> pooling mode; in transaction mode the only fix was to disable client-side prepared statements. <strong>Since PgBouncer 1.21</strong>, you can set <code>max_prepared_statements</code> to a non-zero value and PgBouncer tracks them, re-preparing on the linked backend on the fly. So today the options are: (a) upgrade to 1.21+ and set <code>max_prepared_statements</code>, or (b) disable client-side prepared statements — for JDBC, by adding <code>prepareThreshold=0</code> to the connection string. <code>SET</code> commands and temp tables that must persist across transactions still need a direct/session connection.</p>
+    </div>
+    <div class="conf">Sources: PgBouncer FAQ &amp; the 1.21.0 / 1.22.0 release notes (pgbouncer.org); Crunchy Data &amp; pganalyze write-ups on the 1.21 feature; PlanetScale PgBouncer docs. Confidence: high on the before/after-1.21 behavior, the <code>max_prepared_statements</code> mechanism, and the JDBC <code>prepareThreshold=0</code> workaround. Real-world caveat (verify for your churn/pool size): even on 1.21+, the first prepare on a fresh backend is a real round trip, so very high statement churn with a small pool can add latency. Confirm exact behavior for your driver and PgBouncer version before relying.</div>
+  </section>
+
+  <!-- 10 FAQ -->
+  <section>
+    <p class="num">10</p>
+    <h2>FAQ &amp; misconceptions — every doubt, settled</h2>
+    <p>The exact questions from this whole thread, distilled with the source that backs each answer.</p>
+
+    <div class="faqitem"><p class="q">Q1 &middot; PgBouncer is a pool and HikariCP is a pool — isn&rsquo;t one redundant?</p>
+      <p>No. They pool at different scopes. HikariCP is <em>per app process</em> (fast local access, per-instance backpressure, framework integration); PgBouncer is <em>cluster-wide</em> (collapses the summed connections so the DB survives). Drop HikariCP and every query pays a fresh connect to the pooler; drop PgBouncer and the DB sees the sum of all app pools.</p>
+      <p class="src">Source: HikariCP README; pgbouncer.org. (§1, §3, §4)</p></div>
+
+    <div class="faqitem"><p class="q">Q2 &middot; Are the app&rsquo;s connections &ldquo;just sockets,&rdquo; with only PgBouncer holding real DB connections?</p>
+      <p>No. A DB connection = TCP socket + authenticated protocol session. The app&harr;PgBouncer link <em>is</em> a real Postgres session; it just <strong>terminates at PgBouncer</strong>, which speaks the Postgres protocol on both sides and re-originates its own backend session. &ldquo;PgBouncer opens the real (backend) connections&rdquo; is correct; &ldquo;the app side isn&rsquo;t a DB connection&rdquo; is the error.</p>
+      <p class="src">Source: pgbouncer.org. (§5)</p></div>
+
+    <div class="faqitem"><p class="q">Q3 &middot; Why does the app complain at startup if the DB is unreachable?</p>
+      <p>HikariCP is fail-fast: <code>initializationFailTimeout</code> defaults to 1&nbsp;ms, so it tries to acquire and validate one connection at construction and throws if it can&rsquo;t. A bare socket wouldn&rsquo;t do that — the complaint proves these are real, validated DB sessions.</p>
+      <p class="src">Source: HikariCP README + DeepWiki config. (§5)</p></div>
+
+    <div class="faqitem"><p class="q">Q4 &middot; When more queries arrive than backends, does PgBouncer hold them waiting?</p>
+      <p>Yes — the <em>query</em> queues (the client stays connected), bounded by <code>query_wait_timeout</code> (default 120&nbsp;s); <code>reserve_pool_size</code> adds burst capacity. Watch <code>cl_waiting</code> / <code>maxwait</code> in <code>SHOW POOLS</code>.</p>
+      <p class="src">Source: pgbouncer.org config; OneUptime. (§6)</p></div>
+
+    <div class="faqitem"><p class="q">Q5 &middot; Who defines the number of connections PgBouncer opens?</p>
+      <p>You do, in <code>pgbouncer.ini</code>. Backend count = <code>default_pool_size</code> (default 20, <em>per (user, database) pool</em>), fenced by <code>max_db_connections</code>; client count = <code>max_client_conn</code> (default 100). The hard ceiling above all pools and instances is Postgres&rsquo;s own <code>max_connections</code>.</p>
+      <p class="src">Source: pgbouncer.org config; default 20 corroborated by Crunchy/DZone. (§6)</p></div>
+
+    <div class="faqitem"><p class="q">Q6 &middot; ProxySQL only splits read/write — so the connection count stays the same, right?</p>
+      <p>No. ProxySQL multiplexes/pools too (on by default): tens of thousands of client connections can share a few hundred backend connections. Read/write splitting is layered <em>on top</em> of pooling. ProxySQL is a superset; PgBouncer pools only.</p>
+      <p class="src">Source: proxysql.com (Multiplexing, FAQ). (§7)</p></div>
+
+    <div class="faqitem"><p class="q">Q7 &middot; Do I run PgBouncer and ProxySQL together?</p>
+      <p>Normally no — different ecosystems. PgBouncer is Postgres; ProxySQL is MySQL-family. Pick the one for your DB. For Postgres read/write routing, use Pgpool-II or PgCat, not PgBouncer.</p>
+      <p class="src">Source: pgbouncer.org; proxysql.com. (§7)</p></div>
+
+    <div class="faqitem"><p class="q">Q8 &middot; Does transaction mode still break prepared statements?</p>
+      <p>Only before PgBouncer 1.21 (Oct 2023). Since 1.21, set <code>max_prepared_statements</code> &gt; 0 and they work in transaction mode; for JDBC the disable path is <code>prepareThreshold=0</code>. Even on 1.21+, the first prepare on a fresh backend is a real round trip.</p>
+      <p class="src">Source: pgbouncer.org FAQ + 1.21/1.22 notes; Crunchy Data; pganalyze. (§9)</p></div>
+
+    <div class="faqitem"><p class="q">Q9 &middot; What turns multiplexing off (in either tool)?</p>
+      <p>Session state that can&rsquo;t be shared: an active transaction, <code>SET</code>/session vars, temp tables, advisory locks, and prepared statements. While &ldquo;dirty,&rdquo; the backend is pinned to one client and can&rsquo;t be time-shared — the single rule behind every pooling gotcha here.</p>
+      <p class="src">Source: proxysql.com (Multiplexing); pgbouncer.org (pooling modes). (§7, §9)</p></div>
+  </section>
+
+  <!-- 11 SEED -->
+  <section>
+    <p class="num">11</p>
+    <h2>Chew on this later</h2>
+    <div class="box diffuse"><span class="lab">Diffuse-mode seed</span>
+      <p>This is the <em>same recursive pattern</em> from Part 3&rsquo;s &ldquo;who balances the balancer&rdquo; seed in new clothes — pooling appears at <em>every</em> layer where a scarce resource is shared (threads&rarr;connections inside the app; app-connections&rarr;DB-backends at the proxy). So stack the numbers: HikariCP max 20 per instance, 50 instances, PgBouncer pool of 25, Postgres <code>max_connections</code> of 100 — and a true thundering herd hits. <strong>Where exactly does the queue form, and which ceiling bites first?</strong> Trace one request&rsquo;s wait through all three limits. Getting that trace right is the difference between &ldquo;I configured some pools&rdquo; and &ldquo;I understand where my system actually blocks under load.&rdquo;</p>
+    </div>
+  </section>
+
+  <!-- REFS -->
+  <section>
+    <p class="num">&sect;</p>
+    <h2>References</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Topic</th><th>Source</th></tr></thead>
+      <tbody>
+        <tr><td>HikariCP — app-side JDBC pool, purpose &amp; sizing</td><td><a href="https://github.com/brettwooldridge/HikariCP">github.com/brettwooldridge/HikariCP</a> (incl. the pool-sizing wiki)</td></tr>
+        <tr><td>HikariCP — fail-fast startup (<code>initializationFailTimeout</code>, default 1&nbsp;ms; <code>isValid()</code>)</td><td>HikariCP README; <a href="https://deepwiki.com/brettwooldridge/HikariCP/4-configuration-options">DeepWiki — HikariCP configuration</a></td></tr>
+        <tr><td>PgBouncer — protocol bridge (speaks Postgres protocol both sides), pooling modes</td><td><a href="https://www.pgbouncer.org/features.html">pgbouncer.org</a>; PlanetScale PgBouncer docs</td></tr>
+        <tr><td>PgBouncer — limits &amp; waiting (<code>default_pool_size</code> 20, <code>max_client_conn</code> 100, <code>query_wait_timeout</code> 120&nbsp;s, reserve pool, <code>max_db_connections</code>)</td><td><a href="https://www.pgbouncer.org/config.html">pgbouncer.org/config</a>; OneUptime PgBouncer guides; Crunchy/DZone</td></tr>
+        <tr><td>Transaction-mode prepared-statement support (before/after 1.21)</td><td><a href="https://www.pgbouncer.org/faq.html">PgBouncer FAQ</a>; PgBouncer 1.21.0 / 1.22.0 release notes; <a href="https://www.crunchydata.com/blog/prepared-statements-in-transaction-mode-for-pgbouncer">Crunchy Data</a>; pganalyze; PlanetScale</td></tr>
+        <tr><td>ProxySQL — multiplexing (on by default, many&rarr;few), disabling conditions, prepared-statement pinning</td><td><a href="https://proxysql.com/documentation/multiplexing/">proxysql.com — Multiplexing</a>; ProxySQL FAQ; <a href="https://proxysql.com/documentation/mysql-prepared-statements-pooling-and-caching/">ProxySQL — Prepared Statements</a></td></tr>
+        <tr><td>The connection-storm rationale (process/thread-per-connection)</td><td>Part 3 references (augusteo.com, PlanetScale, postgresql.org connection config); proxysql.com (MySQL thread-per-connection)</td></tr>
+      </tbody>
+    </table></div>
+    <div class="conf">Confidence: <strong>high</strong> on the two-scopes model (per-process vs cluster-wide); the protocol-bridge model (the app&harr;pooler link is a real DB session terminating at the pooler, which speaks the DB protocol both sides); HikariCP fail-fast at startup; that extra queries queue (bounded by <code>query_wait_timeout</code>); that <code>default_pool_size</code> is per (user,&nbsp;database) pool with Postgres <code>max_connections</code> as the hard ceiling; that ProxySQL multiplexes by default (read/write split is layered on top); and the multiplexing-disable conditions. <strong>Verify before relying</strong>: exact non-headline defaults via <code>SHOW CONFIG</code> / <code>SHOW VARIABLES</code> on your build; HikariCP prefill behavior by version; the precise <code>max_prepared_statements</code>/driver settings for your stack; and your serverless platform&rsquo;s recommendation. Illustrative numbers in the diagrams and animations are marked as such; every load-bearing fact is sourced in the table above.</div>
+  </section>
+
+  <footer>
+    Part 3 Addendum &middot; Two-layer connection pooling &middot; companion to Part 3 (Database Load Balancing). Analogy is marked separately from fact; illustrative numbers are flagged. Verify driver/version-specific settings against the cited primary sources before shipping config.
+  </footer>
+
+</div>
+<script>
+(function(){
+  var stage=document.getElementById('cpStage');
+  if(!stage) return;
+  var slots=[].slice.call(stage.querySelectorAll('.cp-slot'));
+  var apps=[].slice.call(stage.querySelectorAll('.cp-appsock'));
+  var srvs=[].slice.call(stage.querySelectorAll('.cp-srvsock'));
+  var bes=[].slice.call(stage.querySelectorAll('.cp-be'));
+  var playBtn=document.getElementById('cpPlay');
+  var usageEl=document.getElementById('cpUsage');
+
+  var slotY=[78,142,206,270];
+  var srvYc=[130,210];
+  var colors=['#7F77DD','#1D9E75','#EF9F27','#D4537E','#378ADD','#D85A30'];
+  var slotFree=[true,true,true,true];
+  var srvFree=[true,true];
+  var cid=0, running=false, timer=null;
+  var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce) stage.style.setProperty('--noanim','1');
+
+  function place(t,cx,cy){ t.style.transform='translate('+(cx-9)+'px,'+(cy-9)+'px)'; }
+  function busy(el,c){ el.style.background=c; el.classList.add('busy'); }
+  function freeEl(el){ el.classList.remove('busy'); el.style.background=''; }
+  function usage(){ var u=srvFree.filter(function(f){return !f;}).length; if(usageEl) usageEl.textContent=u+' / 2'; }
+
+  function acquire(t,si,c){
+    if(!running && !t._started) return;
+    var j=srvFree.indexOf(true);
+    if(j<0){
+      place(t,380,296); t.classList.add('waiting');
+      setTimeout(function(){ acquire(t,si,c); },420);
+      return;
+    }
+    t.classList.remove('waiting');
+    srvFree[j]=false; busy(srvs[j],c); usage();
+    place(t,485,srvYc[j]);
+    setTimeout(function(){ place(t,596,srvYc[j]); busy(bes[j],c); },900);
+    setTimeout(function(){
+      t.style.opacity='0';
+      freeEl(srvs[j]); srvFree[j]=true;
+      freeEl(bes[j]);
+      freeEl(apps[si]);
+      freeEl(slots[si]); slotFree[si]=true;
+      usage();
+      setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); },520);
+    },900+1200);
+  }
+
+  function spawn(){
+    if(!running) return;
+    var si=slotFree.indexOf(true);
+    if(si<0) return;
+    slotFree[si]=false;
+    var c=colors[cid%colors.length]; cid++;
+    var t=document.createElement('div'); t.className='cp-tok'; t.style.background=c; t._started=true;
+    stage.appendChild(t);
+    place(t,40,slotY[si]);
+    setTimeout(function(){ place(t,174,slotY[si]); busy(slots[si],c); },60);
+    setTimeout(function(){ place(t,380,slotY[si]); busy(apps[si],c); },1000);
+    setTimeout(function(){ acquire(t,si,c); },1900);
+  }
+
+  function start(){
+    running=true; playBtn.innerHTML='&#10073;&#10073;&nbsp; Pause';
+    spawn(); timer=setInterval(spawn,1500);
+  }
+  function stop(){
+    running=false; playBtn.innerHTML='&#9654;&nbsp; Play';
+    clearInterval(timer); timer=null;
+  }
+  playBtn.addEventListener('click',function(){ running?stop():start(); });
+  if(!reduce){ start(); }
+})();
+</script>
+</body>
+</html>
