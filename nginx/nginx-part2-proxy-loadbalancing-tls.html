@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NGINX in Production — Part 2: Proxying, Load Balancing &amp; TLS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f6f3ea; --paper2:#fffdf7; --paper3:#efe9da;
+    --ink:#211f1a; --ink2:#56534b; --ink3:#85817760;
+    --line:#e2dccd; --line2:#d4cdba;
+    --teal:#0f7b6c; --teal-bg:#e4f0ec; --teal-ink:#0a4f46;
+    --coral:#bb5128; --coral-bg:#f7e7de; --coral-ink:#7d3416;
+    --amber:#a9760f; --amber-bg:#f7eed6; --amber-ink:#6f4d07;
+    --purple:#544aad; --purple-bg:#eae8f6; --purple-ink:#332c75;
+    --red:#a8331f; --red-bg:#f8e3de;
+    --gray-bg:#ece7da;
+    --sans:'IBM Plex Sans',-apple-system,system-ui,sans-serif;
+    --serif:'Fraunces',Georgia,serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.72;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:240px 1fr;gap:48px}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr;gap:0}}
+
+  header.hero{grid-column:1/-1;padding:64px 0 36px;border-bottom:2px solid var(--ink);margin-bottom:8px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--teal);margin:0 0 14px}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(34px,5.5vw,62px);line-height:1.03;margin:0;letter-spacing:-.015em}
+  h1 em{font-style:italic;color:var(--coral)}
+  .lede{font-family:var(--serif);font-size:clamp(18px,2.4vw,23px);line-height:1.5;color:var(--ink2);max-width:50ch;margin:20px 0 24px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px}
+  .pill{font-family:var(--mono);font-size:12px;background:var(--paper3);border:1px solid var(--line2);padding:5px 12px;border-radius:99px;color:var(--ink2)}
+  .prevlink{display:inline-block;margin-top:18px;font-family:var(--mono);font-size:13px;color:var(--teal)}
+
+  nav.toc{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:32px 0;font-size:13.5px}
+  @media(max-width:900px){nav.toc{position:static;height:auto;border-bottom:1px solid var(--line);padding:20px 0}}
+  nav.toc .t{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink2);margin:0 0 12px}
+  nav.toc a{display:block;color:var(--ink2);text-decoration:none;padding:5px 10px;border-left:2px solid transparent;border-radius:0 6px 6px 0;line-height:1.35;margin-bottom:1px}
+  nav.toc a:hover{color:var(--ink);background:var(--paper3);border-left-color:var(--teal)}
+
+  main{padding:36px 0 100px;min-width:0}
+  section{margin-bottom:64px;scroll-margin-top:24px}
+  .num{font-family:var(--mono);font-size:13px;color:var(--coral);letter-spacing:.1em}
+  h2{font-family:var(--serif);font-weight:600;font-size:clamp(27px,4vw,38px);line-height:1.1;margin:6px 0 20px;letter-spacing:-.01em}
+  h3{font-family:var(--serif);font-weight:600;font-size:22px;margin:36px 0 10px}
+  h4{font-family:var(--sans);font-weight:600;font-size:16px;margin:24px 0 8px;color:var(--ink)}
+  p{margin:0 0 16px}
+  a{color:var(--teal);text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
+  strong{font-weight:600}
+  code{font-family:var(--mono);font-size:.86em;background:var(--paper3);padding:2px 6px;border-radius:5px;border:1px solid var(--line)}
+  .lead{font-size:19px;color:var(--ink2)}
+
+  .box{border-radius:var(--radius);padding:18px 20px;margin:20px 0;border:1px solid var(--line2);position:relative}
+  .box .lab{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:500;display:inline-block;margin-bottom:8px}
+  .box p:last-child{margin-bottom:0}
+  .analogy{background:var(--amber-bg);border-color:#e8d6a6}.analogy .lab{color:var(--amber-ink)}
+  .fact{background:var(--teal-bg);border-color:#bcdcd4}.fact .lab{color:var(--teal-ink)}
+  .trap{background:var(--red-bg);border-color:#e6bdb2}.trap .lab{color:var(--red)}
+  .recall{background:var(--purple-bg);border-color:#cdc8ee}.recall .lab{color:var(--purple-ink)}
+  .diffuse{background:var(--paper2);border-color:var(--line2);border-style:dashed}.diffuse .lab{color:var(--ink2)}
+  .war{background:#26231e;border-color:#1a1814;color:#ece6d7}.war .lab{color:#e9a06a}.war code{background:#3a362e;border-color:#46413a;color:#f0d9b5}.war a{color:#7fd3c0}
+  .conf{font-size:13.5px;color:var(--ink2);font-style:italic;border-left:3px solid var(--line2);padding:2px 0 2px 14px;margin:16px 0}
+
+  pre.ascii{font-family:var(--mono);font-size:12.5px;line-height:1.45;background:#272521;color:#e9e3d4;padding:18px 20px;border-radius:var(--radius);overflow-x:auto;margin:20px 0;border:1px solid #1a1814}
+  pre.ascii .c{color:#7fd3c0}.ascii .o{color:#e9a06a}.ascii .m{color:#b3acd9}.ascii .d{color:#888377}.ascii .r{color:#e98a7a}
+
+  pre.code{font-family:var(--mono);font-size:12.5px;line-height:1.55;background:var(--paper2);color:var(--ink);padding:16px 18px;border-radius:var(--radius);overflow-x:auto;margin:16px 0;border:1px solid var(--line2)}
+  pre.code .k{color:var(--purple)}.code .s{color:var(--teal)}.code .cm{color:var(--ink2);font-style:italic}
+
+  .tbl{overflow-x:auto;margin:20px 0;border-radius:var(--radius);border:1px solid var(--line2)}
+  table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--paper2)}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;background:var(--paper3);color:var(--ink2);font-weight:500}
+  tr:last-child td{border-bottom:none}
+  td code{font-size:.82em}
+  .ok{color:var(--teal);font-weight:600}.no{color:var(--coral);font-weight:600}.mid{color:var(--amber);font-weight:600}
+
+  figure{margin:24px 0;background:var(--paper2);border:1px solid var(--line2);border-radius:var(--radius);padding:22px}
+  figure svg{display:block;width:100%;height:auto}
+  figcaption{font-size:13.5px;color:var(--ink2);margin-top:12px;font-style:italic}
+  .svgt{font-family:var(--sans);font-size:13px;font-weight:500;fill:var(--ink)}
+  .svgts{font-family:var(--sans);font-size:11px;fill:var(--ink2)}
+
+  /* handshake player */
+  .player-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px}
+  button.play{font-family:var(--mono);font-size:13px;background:var(--ink);color:var(--paper);border:none;padding:10px 20px;border-radius:9px;cursor:pointer;letter-spacing:.04em}
+  button.play:hover{background:var(--teal)}
+  .step-cap{font-size:14.5px;color:var(--ink2);min-height:24px;flex:1;min-width:240px}
+  .step-cap b{color:var(--ink)}
+  .hbadge circle{transition:fill .3s}.hbadge text{transition:fill .3s}
+  .hbadge.on circle{fill:var(--purple)}
+  .hmsg{transition:opacity .3s,stroke-width .3s}.hmsg.on{opacity:1 !important;stroke-width:2.5 !important}
+
+  /* three-model toggle */
+  .toggle-row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px}
+  button.toggle{font-family:var(--mono);font-size:13px;background:var(--paper2);color:var(--ink2);border:1px solid var(--line2);padding:9px 16px;border-radius:9px;cursor:pointer}
+  button.toggle.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .stage{margin:18px 0;background:var(--paper2);border:1px solid var(--line2);border-radius:var(--radius);padding:24px}
+  .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+  .nodebox{flex:1;min-width:120px;border:1px solid var(--line2);border-radius:10px;padding:12px;text-align:center;background:var(--paper3)}
+  .nodebox .nt{font-weight:600;font-size:14px}
+  .nodebox .ns{font-size:11.5px;color:var(--ink2);margin-top:4px;font-family:var(--mono);line-height:1.4}
+  .nodebox.lb{background:var(--purple-bg);border-color:#cdc8ee}
+  .pipe{flex:0 0 70px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;text-align:center;padding:0 2px}
+  .pipe .bar{height:8px;width:100%;border-radius:4px;margin-bottom:5px}
+  .pipe.enc .bar{background:var(--teal)}
+  .pipe.plain .bar{background:repeating-linear-gradient(90deg,var(--coral),var(--coral) 5px,transparent 5px,transparent 10px)}
+  .pipe.enc .lbl{color:var(--teal-ink)}.pipe.plain .lbl{color:var(--coral-ink)}
+  @media(max-width:620px){.pipe{flex-basis:40px}.nodebox .ns{font-size:10px}}
+  .stage-note{margin-top:16px;font-size:14px;color:var(--ink2);border-top:1px solid var(--line);padding-top:14px}
+  .stage-note b{color:var(--ink)}
+
+  footer{grid-column:1/-1;border-top:2px solid var(--ink);padding:28px 0 60px;font-size:13.5px;color:var(--ink2)}
+
+  @media(prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important;scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <p class="kicker">Visual-first learning &middot; Knowledge base &middot; Part 2</p>
+    <h1>NGINX in Production: <em>Proxying, Balancing &amp; TLS</em></h1>
+    <p class="lede">Part 1 explained the engine — how NGINX moves bytes (the event loop, file descriptors, epoll). Part 2 is about what it <em>does</em> with them: standing in front of your app, spreading load across servers, and handling encryption — including the parts everyone gets subtly wrong.</p>
+    <div class="meta">
+      <span class="pill">Reverse proxy</span>
+      <span class="pill">L4 vs L7 load balancing</span>
+      <span class="pill">TLS termination &amp; certificates</span>
+    </div>
+    <span class="prevlink">&larr; Builds on Part 1: NGINX Fundamentals (C10k, file descriptors, epoll, the request lifecycle)</span>
+  </header>
+
+  <nav class="toc">
+    <p class="t">Contents</p>
+    <a href="#proxy">1 &middot; The reverse proxy</a>
+    <a href="#lb">2 &middot; Load balancing</a>
+    <a href="#l4l7">3 &middot; L4 vs L7, in depth</a>
+    <a href="#wars">4 &middot; Real-world war stories</a>
+    <a href="#tls">5 &middot; What TLS actually is</a>
+    <a href="#handshake">6 &middot; The handshake</a>
+    <a href="#models">7 &middot; Three TLS models</a>
+    <a href="#recreate">8 &middot; Why "recreate" TLS</a>
+    <a href="#certs">9 &middot; Which certificate where</a>
+    <a href="#failclosed">10 &middot; When something's wrong</a>
+    <a href="#keys">11 &middot; How NGINX gets the key</a>
+    <a href="#spoof">12 &middot; Can anyone spoof?</a>
+    <a href="#saas">13 &middot; The SaaS-user case</a>
+    <a href="#glossary">14 &middot; Glossary</a>
+    <a href="#recall">15 &middot; Recall &amp; seeds</a>
+    <a href="#refs">References</a>
+  </nav>
+
+  <main>
+
+  <!-- 1 REVERSE PROXY -->
+  <section id="proxy">
+    <p class="num">01</p>
+    <h2>The reverse proxy — your app's front door</h2>
+    <p class="lead">A reverse proxy sits in front of your application servers, takes every client request, forwards it to a backend, and relays the response back. To the outside world it looks like one server.</p>
+    <p>You already met it in Part 1: remember <code>FD 51</code>, the connection NGINX opened <em>out</em> to the backend in the request round-trip? That outbound leg <em>was</em> reverse proxying. Here&rsquo;s why you&rsquo;d want a middleman there at all.</p>
+
+    <h3>The problem — a naked app server</h3>
+    <p>Picture your Node/Python/Ruby app server with a public IP, exposed directly. It now has to personally do everything:</p>
+    <pre class="ascii">   internet ──►[ app server ]  ← personally responsible for EVERYTHING:
+                                   <span class="d">• TLS handshakes (crypto-heavy, not its job)</span>
+                                   <span class="d">• serving static files (logo, CSS, JS)</span>
+                                   <span class="d">• app logic (the only thing it SHOULD do)</span>
+                                   <span class="d">• being the single thing everyone hits</span>
+
+   slow client <span class="r">·····(dribbles request over 8s on bad 3G)·····►</span> ties up a
+                                   whole app worker for the ENTIRE 8 seconds</pre>
+    <p>Four concrete pains: it burns cycles on jobs it&rsquo;s bad at (TLS, static files); <strong>slow clients are poison</strong> (one bad-3G client on an 8-second request holds an expensive app worker hostage the whole time); no zero-downtime deploys (restart the app and everyone hits a dead server); and you can&rsquo;t scale out cleanly (one server is a single point of failure).</p>
+
+    <div class="box analogy"><span class="lab">Anchor analogy</span>
+      <p>The reverse proxy is the <strong>maître d&rsquo;</strong> (our anchor from Part 1). Guests never march into the kitchen and shout their order at a chef — they tell the host, who relays it to the right kitchen and brings the plate back. The kitchen is shielded; the guest only ever talks to the front.</p>
+    </div>
+
+    <div class="box trap"><span class="lab">Name the trap &middot; forward vs reverse proxy</span>
+      <p>&ldquo;Proxy&rdquo; hides two opposite jobs. A <strong>forward proxy</strong> stands in front of <em>clients</em> and hides them from servers (a corporate web filter; your browser routed through a company proxy) — it acts on the client&rsquo;s behalf. A <strong>reverse proxy</strong> stands in front of <em>servers</em> and hides them from clients — it acts on the server&rsquo;s behalf. Forward proxy = a personal assistant who makes calls for you. Reverse proxy = the company receptionist who answers every incoming call. Our maître d&rsquo; is the receptionist. <span style="color:var(--ink2)">(The forward/reverse distinction is settled — NGINX glossary, MDN.)</span></p>
+    </div>
+
+    <h3>The payoff that ties back to Part 1 — the slow-client buffer</h3>
+    <pre class="ascii">   Without NGINX:  app worker is BUSY the full 8s the slow client dribbles.
+
+   With NGINX:     NGINX (event-driven, idle connections ~free — remember epoll?)
+                   absorbs all 8s of dribble, BUFFERS the whole request, then
+                   hands it to the app server in one fast burst.
+                   ──► the expensive app worker is busy for MILLISECONDS, not 8s.</pre>
+    <p>This is exactly <em>why</em> NGINX&rsquo;s cheap-per-connection architecture (the whole epoll story) makes it a perfect front door: it can babysit thousands of slow clients for almost nothing, shielding costly backends. <span style="color:var(--ink2)">(Concept settled — NGINX request buffering, <code>proxy_buffering</code>; nginx.org.)</span></p>
+
+    <h4>When to use / when not to</h4>
+    <p><strong>Use it</strong> for anything past a toy in production: more than one backend (or might be), TLS termination, mixed static + dynamic content, zero-downtime deploys, hiding app servers on a private network. <strong>Reconsider</strong> when a CDN already fronts a pure static site (the CDN <em>is</em> your edge proxy), a managed cloud LB already covers you, or it&rsquo;s a trivial internal tool where the extra hop and ops aren&rsquo;t worth it.</p>
+  </section>
+
+  <!-- 2 LOAD BALANCING -->
+  <section id="lb">
+    <p class="num">02</p>
+    <h2>Load balancing — many kitchens, one host</h2>
+    <p>Load balancing distributes requests across multiple backends so no single one is overwhelmed, and so the system survives any one dying. <strong>The reverse proxy is the position; load balancing is the policy.</strong></p>
+
+    <h3>The problem — the single-server wall</h3>
+    <pre class="ascii">   traffic grows ──►  [ one app server ]  ──► (1) CAPACITY CEILING: maxes out
+                                                   CPU/RAM, starts dropping requests
+                       [ one app server ]  ──► (2) SINGLE POINT OF FAILURE:
+                            <span class="r">x  it dies</span>                the ENTIRE site is down.</pre>
+    <p>So you buy a second server — now you have capacity and a spare. But a new problem appears instantly: a browser only knows one address, so <strong>something has to sit in front and divvy up the work.</strong> And a beautiful bonus: that something can keep a mental note of which kitchens are alive, and stop sending orders to one that caught fire — that&rsquo;s <strong>health checking</strong>, which makes load balancing about <em>survival</em>, not just speed.</p>
+
+    <h3>The alternatives</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Approach</th><th>How it splits traffic</th><th>The catch</th></tr></thead>
+      <tbody>
+        <tr><td>Scale up (vertical)</td><td>Don&rsquo;t split — buy a bigger box</td><td>Still one box = still a single point of failure; hardware ceiling</td></tr>
+        <tr><td>DNS round-robin</td><td>DNS returns a different IP each lookup</td><td>Clients <strong>cache</strong> DNS (lumpy); <strong>no health awareness</strong> — hands out dead servers&rsquo; IPs</td></tr>
+        <tr><td>Hardware LB</td><td>Dedicated appliance (F5, Citrix)</td><td>Expensive; the enterprise &ldquo;before&rdquo; answer</td></tr>
+        <tr><td>Client-side LB</td><td>The client picks a backend itself</td><td>Client must know all backends; common <em>inside</em> microservices</td></tr>
+        <tr><td><strong>Reverse-proxy LB (NGINX)</strong></td><td>Proxy in front picks per-request</td><td>The flexible, cheap, health-aware default for web</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="box trap"><span class="lab">The cost load balancing introduces &middot; state</span>
+      <p>Spreading requests collides with &ldquo;this user must keep talking to the same backend.&rdquo; If a user logs in and their session lives in server A&rsquo;s memory, but their next request lands on server B, they&rsquo;re suddenly logged out. Fixes exist — <strong>sticky sessions</strong> (pin a user to one backend) or a <strong>shared session store</strong> (Redis/DB so any backend can serve any user) — and which you pick is a real architecture decision.</p>
+    </div>
+
+    <h4>Health checks — active vs passive</h4>
+    <p>How does NGINX know a backend is dead? Two strategies. <strong>Passive</strong>: it notices when a forwarded request fails and backs that server off for a while — meaning some unlucky request had to fail <em>first</em>. <strong>Active</strong>: it proactively pings each backend on a schedule, catching a dead server <em>before</em> a real user hits it.</p>
+    <div class="conf">Important version flag: open-source NGINX ships <strong>passive</strong> health checks (the <code>max_fails</code> / <code>fail_timeout</code> parameters in an <code>upstream</code> block). <strong>Active</strong> health checks (the <code>health_check</code> directive) are a feature of the commercial <strong>NGINX Plus</strong>. Confidence: medium-high — verify against current nginx.org docs before relying, as the OSS/Plus feature line can shift.</div>
+  </section>
+
+  <!-- 3 L4 L7 -->
+  <section id="l4l7">
+    <p class="num">03</p>
+    <h2>L4 vs L7 — the two ways to balance</h2>
+    <p>Two layers, two fundamentally different jobs. The single most useful thing to internalize: <strong>L4 balances <em>connections</em>; L7 balances <em>requests</em>.</strong></p>
+
+    <div class="box analogy"><span class="lab">Analogy</span>
+      <p>L4 is the <strong>doorman who glances at your wristband</strong> — &ldquo;blue band, section 3&rdquo; — and waves you in without ever hearing your order. L7 is the <strong>maître d&rsquo; who listens to your full order</strong> — &ldquo;vegan tasting menu, no nuts&rdquo; — and routes you to the kitchen that can make it. The doorman is faster; the maître d&rsquo; is smarter.</p>
+    </div>
+
+    <div class="tbl"><table>
+      <thead><tr><th></th><th>L4 — transport layer</th><th>L7 — application layer</th></tr></thead>
+      <tbody>
+        <tr><td>Reads</td><td>The &ldquo;envelope&rdquo;: src/dst IP + port, protocol (the <strong>4-tuple</strong>). Never opens the payload.</td><td>The actual HTTP: method, path, headers, cookies, Host.</td></tr>
+        <tr><td>Decision unit</td><td>Per <strong>connection</strong> (pins a whole connection to one backend)</td><td>Per <strong>request</strong> (each request can go to a different backend)</td></tr>
+        <tr><td>NGINX block</td><td><code>stream { }</code></td><td><code>http { }</code></td></tr>
+        <tr><td>Speed vs smarts</td><td>Fast, low overhead, protocol-agnostic (any TCP/UDP)</td><td>Smarter (route by path/header), can do WAF/cache/retries; slightly more latency</td></tr>
+        <tr><td>Good for</td><td>Databases, game UDP, SMTP, DNS, raw TCP, max throughput</td><td>Web apps, microservices, canary/blue-green, multi-domain hosting</td></tr>
+      </tbody>
+    </table></div>
+
+    <figure>
+      <svg viewBox="0 0 680 250" role="img" aria-label="L4 reads only the connection envelope (4-tuple) without opening the payload; L7 opens the request and reads HTTP details.">
+        <text class="svgt" x="20" y="30" font-weight="600">L4 sees only the ENVELOPE</text>
+        <rect x="20" y="44" width="300" height="150" rx="10" fill="var(--gray-bg)" stroke="var(--line2)"/>
+        <text class="svgts" x="40" y="74" font-family="var(--mono)">src IP : port  →  dst IP : port</text>
+        <text class="svgts" x="40" y="96" font-family="var(--mono)">proto: TCP</text>
+        <rect x="40" y="112" width="260" height="62" rx="6" fill="#2a2722"/>
+        <text x="170" y="148" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#88837780" style="fill:#9a9488">[ payload: opaque, encrypted bytes ]</text>
+        <text class="svgts" x="20" y="218" fill="var(--teal-ink)">decision: hash(4-tuple) → one backend, whole connection</text>
+
+        <text class="svgt" x="360" y="30" font-weight="600">L7 OPENS the letter</text>
+        <rect x="360" y="44" width="300" height="150" rx="10" fill="var(--teal-bg)" stroke="#bcdcd4"/>
+        <text class="svgts" x="380" y="72" font-family="var(--mono)">POST /api/v2/checkout HTTP/2</text>
+        <text class="svgts" x="380" y="94" font-family="var(--mono)">Host: shop.example.com</text>
+        <text class="svgts" x="380" y="116" font-family="var(--mono)">Cookie: session=abc123</text>
+        <text class="svgts" x="380" y="138" font-family="var(--mono)">Authorization: Bearer …</text>
+        <text class="svgts" x="360" y="218" fill="var(--teal-ink)">decision: /api→pool A · /img→pool B · cookie→sticky · header→canary</text>
+      </svg>
+      <figcaption>L4 routes on the sealed envelope and pins the whole connection. L7 reads the request and can route each one differently.</figcaption>
+    </figure>
+
+    <h3>How L4 agrees with itself at scale (the non-obvious part)</h3>
+    <p>At edge scale you run <em>many</em> L4 boxes, and new connections arrive too fast to share state between them. So instead of syncing, each load balancer reaches the same forwarding decision <strong>independently</strong>, by <strong>hashing the connection&rsquo;s 4-tuple</strong> — every node computes the same backend for the same flow with zero coordination. Two more L4 staples worth knowing: <strong>Direct Server Return (DSR)</strong> — the backend replies straight to the client, bypassing the LB on the way out (great when traffic is outbound-heavy) — and <strong>kernel-bypass</strong> for raw speed (DPDK, XDP/eBPF). These show up in the war stories next. <span style="color:var(--ink2)">(All from the engineering posts cited in §4 and §References.)</span></p>
+  </section>
+
+  <!-- 4 WAR STORIES -->
+  <section id="wars">
+    <p class="num">04</p>
+    <h2>Real-world war stories</h2>
+    <p>This is where L4/L7 stops being a definition and becomes a set of scars. These are drawn from public engineering write-ups (full links in References) — paraphrased, not quoted.</p>
+
+    <div class="box war"><span class="lab">Case 1 &middot; the HTTP/2 &amp; gRPC multiplexing trap</span>
+      <p>The #1 &ldquo;you need L7&rdquo; lesson. HTTP/2 and gRPC <strong>multiplex many requests over one long-lived connection</strong>. An L4 LB pins a <em>connection</em> to one backend — so a gRPC client that opens one connection and fires 10,000 requests sends <strong>all 10,000 to a single backend</strong> while the others idle. L7 sees the individual streams and spreads them. If you&rsquo;ve deployed gRPC behind a plain network (L4) LB and watched one pod redline while peers nap — this is why. <span style="color:#9a9488">(CloudRPS, Gravitee.)</span></p>
+    </div>
+
+    <div class="box war"><span class="lab">Case 2 &middot; databases want L4, not L7</span>
+      <p>The flip side. Databases speak their own wire protocols (PostgreSQL, MySQL) — <strong>not HTTP</strong> — so an HTTP-parsing L7 proxy literally can&rsquo;t understand them. Use L4 (NGINX <code>stream</code>) with TCP health checks, and watch idle timeouts since DB connections are long-lived. For protocol-aware routing, reach for specialized proxies (PgBouncer, ProxySQL). <span style="color:#9a9488">(CloudRPS.)</span></p>
+    </div>
+
+    <div class="box war"><span class="lab">Case 3 &middot; GitHub&rsquo;s split L4/L7 tiers (why run both)</span>
+      <p>GitHub&rsquo;s GLB splits into a <strong>director tier (L4)</strong> and a <strong>proxy tier (L7, HAProxy)</strong>. Routers ECMP-shard traffic to directors by consistent hashing; directors forward to the proxy tier. The operational payoff: the L4 tier rarely changes, but the L7 tier changes hourly/daily, so the split contains config-change risk — and because the director keeps existing connections pinned to their proxy, you can <strong>drain an L7 proxy gracefully</strong> without breaking live connections. They rewrote the director on DPDK for line-rate packet processing, use <strong>Direct Server Return</strong>, and added &ldquo;second-chance&rdquo; <strong>rendezvous hashing</strong> (pick a primary <em>and</em> secondary backend) so a node change doesn&rsquo;t break in-flight flows. <span style="color:#9a9488">(GitHub Engineering — GLB.)</span></p>
+    </div>
+
+    <div class="box war"><span class="lab">Case 4 &middot; Cloudflare&rsquo;s edge — L4 (Unimog) + L7, side by side</span>
+      <p>Cloudflare runs both with a clean division of labor: the <strong>L7 stack</strong> applies CDN, WAF, bot management, and DDoS protection to HTTP(S); <strong>L4 (Unimog / Spectrum)</strong> handles arbitrary TCP/UDP at the transport layer. Unimog runs in <strong>XDP</strong> and lets each LB reach consistent forwarding decisions independently (no state sharing). A neat reach-detail: for their WARP VPN (UDP/WireGuard), they extended the protocol with a session ID and added a custom <strong>flow dissector</strong> so the hash stays stable — after which server load became much more uniform. <span style="color:#9a9488">(Cloudflare — Unimog, Spectrum, Maglev.)</span></p>
+    </div>
+
+    <div class="box war"><span class="lab">Case 5 &middot; &ldquo;Connections were balanced. Load wasn&rsquo;t.&rdquo;</span>
+      <p>A post-mortem that captures L4&rsquo;s subtlest failure: the dashboard showed even distribution — and technically it was, by <em>connection count</em>. But one backend caught three 40-minute video exports while another caught thirty 50ms health checks. Same connection count, wildly different load. Symptom: video exports timing out, trials lost, ~120 hours burned debugging &ldquo;random failures.&rdquo; <span style="color:#9a9488">(&ldquo;The Speed Engineer&rdquo;, Medium.)</span></p>
+    </div>
+
+    <div class="box trap"><span class="lab">Name the trap &middot; the one that unifies them all</span>
+      <p><strong>L4 balances connections; it has no idea how much work or how many requests ride inside each one.</strong> In the old world (one short HTTP/1.1 request per connection) that distinction was academic. In the modern world — long-lived HTTP/2, gRPC, WebSockets, big asymmetric jobs — &ldquo;connection-balanced&rdquo; and &ldquo;load-balanced&rdquo; have <em>diverged</em>. Trusting L4 to balance load is how you get one machine on fire while the rest nap.</p>
+    </div>
+
+    <h4>The verdict</h4>
+    <p>The blogs converge: for most web apps, use an <strong>L7</strong> load balancer for HTTP and an <strong>L4</strong> load balancer for everything else. They coexist happily, solving different problems at different layers.</p>
+  </section>
+
+  <!-- 5 WHAT IS TLS -->
+  <section id="tls">
+    <p class="num">05</p>
+    <h2>What TLS actually is</h2>
+    <p class="lead">TLS (Transport Layer Security — the modern name for what was called SSL) does three jobs at once. People think it&rsquo;s just &ldquo;the privacy lock.&rdquo; It&rsquo;s three things.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Job</th><th>Plain meaning</th><th>Without it…</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Encryption</strong></td><td>Nobody on the path can <em>read</em> your data</td><td>A coffee-shop snoop reads your password</td></tr>
+        <tr><td><strong>Authentication</strong></td><td>You&rsquo;re really talking to who you think</td><td>You hand your password to an impostor</td></tr>
+        <tr><td><strong>Integrity</strong></td><td>Nobody <em>altered</em> the data in flight</td><td>An attacker silently changes &ldquo;$10&rdquo; to &ldquo;$10,000&rdquo;</td></tr>
+      </tbody>
+    </table></div>
+    <div class="box analogy"><span class="lab">Analogy</span>
+      <p>TLS wraps your message in a <strong>sealed envelope</strong> (encryption), stamped with a <strong>verified ID proving who the recipient is</strong> (authentication), using a <strong>tamper-evident seal that visibly breaks if touched</strong> (integrity). All three, or it isn&rsquo;t TLS.</p>
+    </div>
+    <div class="conf">Confidence: high. Confidentiality + authentication + integrity are TLS&rsquo;s three guarantees — RFC 8446 (TLS 1.3).</div>
+  </section>
+
+  <!-- 6 HANDSHAKE -->
+  <section id="handshake">
+    <p class="num">06</p>
+    <h2>The handshake — how the lock gets set up</h2>
+    <p>Before any real data flows, client and server negotiate. This one sequence makes everything afterward make sense. <strong>Press play.</strong></p>
+
+    <figure>
+      <svg viewBox="0 0 680 300" role="img" aria-label="TLS handshake: ClientHello with cleartext SNI, server responds with certificate, client validates it, both derive a shared session key, then encrypted data flows.">
+        <rect x="30" y="40" width="150" height="44" rx="9" fill="var(--teal-bg)" stroke="var(--teal)"/>
+        <text class="svgt" x="105" y="67" text-anchor="middle" fill="var(--teal-ink)">CLIENT (browser)</text>
+        <rect x="500" y="40" width="150" height="44" rx="9" fill="var(--purple-bg)" stroke="var(--purple)"/>
+        <text class="svgt" x="575" y="67" text-anchor="middle" fill="var(--purple-ink)">SERVER (NGINX)</text>
+        <line x1="105" y1="84" x2="105" y2="280" stroke="var(--line2)" stroke-dasharray="3 4"/>
+        <line x1="575" y1="84" x2="575" y2="280" stroke="var(--line2)" stroke-dasharray="3 4"/>
+
+        <line id="H1" class="hmsg" x1="115" y1="110" x2="565" y2="110" stroke="var(--ink2)" stroke-width="1" opacity=".35" marker-end="url(#hh)"/>
+        <line id="H2" class="hmsg" x1="565" y1="150" x2="115" y2="150" stroke="var(--ink2)" stroke-width="1" opacity=".35" marker-end="url(#hh)"/>
+        <line id="H4" class="hmsg" x1="115" y1="225" x2="565" y2="225" stroke="var(--teal)" stroke-width="1" opacity=".35" marker-end="url(#hh)"/>
+        <line id="H5" class="hmsg" x1="565" y1="258" x2="115" y2="258" stroke="var(--teal)" stroke-width="1" opacity=".35" marker-end="url(#hh)"/>
+        <defs><marker id="hh" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+
+        <text class="svgts" x="340" y="104" text-anchor="middle">ClientHello — &ldquo;I want example.com&rdquo; + ciphers (SNI in CLEARTEXT)</text>
+        <text class="svgts" x="340" y="144" text-anchor="middle">ServerHello + CERTIFICATE (+ key material)</text>
+        <text class="svgts" x="340" y="186" text-anchor="middle" fill="var(--coral-ink)">client validates cert: trusted CA? right host? not expired?</text>
+        <text class="svgts" x="340" y="219" text-anchor="middle" fill="var(--teal-ink)">key exchange → both derive the SAME secret session key</text>
+        <text class="svgts" x="340" y="252" text-anchor="middle" fill="var(--teal-ink)">🔒 encrypted application data flows</text>
+
+        <g class="hbadge" id="HB1"><circle cx="105" cy="110" r="10" fill="var(--ink3)"/><text x="105" y="114" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="#fff">1</text></g>
+        <g class="hbadge" id="HB2"><circle cx="575" cy="150" r="10" fill="var(--ink3)"/><text x="575" y="154" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="#fff">2</text></g>
+        <g class="hbadge" id="HB3"><circle cx="105" cy="186" r="10" fill="var(--ink3)"/><text x="105" y="190" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="#fff">3</text></g>
+        <g class="hbadge" id="HB4"><circle cx="340" cy="225" r="10" fill="var(--ink3)"/><text x="340" y="229" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="#fff">4</text></g>
+        <g class="hbadge" id="HB5"><circle cx="340" cy="280" r="10" fill="var(--ink3)"/><text x="340" y="284" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="#fff">5</text></g>
+      </svg>
+      <div class="player-bar">
+        <button class="play" id="hsBtn">&#9654;&nbsp; Play handshake</button>
+        <div class="step-cap" id="hsCap">Press play to step through how a TLS connection is established.</div>
+      </div>
+    </figure>
+
+    <p>Two things to lock in. The <strong>certificate</strong> is an ID card binding a hostname to a public key, <strong>signed by a Certificate Authority (CA)</strong> the browser trusts; the server proves it owns the matching <strong>private key</strong>. And after the handshake the two sides share a <strong>secret session key only they have</strong> — which is the crux of §8.</p>
+    <div class="conf">Confidence: high on the structure. The exact messages/round-trips differ between TLS 1.2 and 1.3 (1.3 is faster, fewer round-trips) — RFC 8446. The diagram is a faithful simplification, not a byte-level trace.</div>
+  </section>
+
+  <!-- 7 THREE MODELS -->
+  <section id="models">
+    <p class="num">07</p>
+    <h2>The three TLS models — where does the envelope get opened?</h2>
+    <p>A load balancer can handle TLS three ways. The whole question is: <strong>who opens the sealed envelope, and does it get re-sealed afterward?</strong> Toggle between them:</p>
+
+    <div class="toggle-row">
+      <button class="toggle active" data-model="pass">1 · Passthrough (L4)</button>
+      <button class="toggle" data-model="term">2 · Termination (L7)</button>
+      <button class="toggle" data-model="bridge">3 · Bridging (L7)</button>
+    </div>
+    <div class="stage">
+      <div class="flow">
+        <div class="nodebox"><div class="nt">Client</div><div class="ns">browser</div></div>
+        <div class="pipe enc" id="pipeL"><div class="bar"></div><div class="lbl" id="pipeLlbl">🔒 encrypted</div></div>
+        <div class="nodebox lb"><div class="nt">NGINX</div><div class="ns" id="lbrole">reads SNI only<br>no key, no decrypt</div></div>
+        <div class="pipe enc" id="pipeR"><div class="bar"></div><div class="lbl" id="pipeRlbl">🔒 encrypted</div></div>
+        <div class="nodebox"><div class="nt">Backend</div><div class="ns" id="berole">holds the key,<br>terminates TLS</div></div>
+      </div>
+      <div class="stage-note" id="stageNote"></div>
+    </div>
+
+    <p style="margin-top:24px">In NGINX config terms:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Model</th><th>NGINX</th><th>Cert on NGINX?</th><th>Backend hop</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Passthrough</strong></td><td><code>stream { }</code> + <code>ssl_preread on;</code></td><td class="no">None</td><td class="ok">Encrypted (end-to-end)</td></tr>
+        <tr><td><strong>Termination</strong></td><td><code>http { listen 443 ssl; }</code> → <code>proxy_pass http://</code></td><td class="ok">Yes</td><td class="no">Plaintext</td></tr>
+        <tr><td><strong>Bridging</strong></td><td><code>http { listen 443 ssl; }</code> → <code>proxy_pass https://</code></td><td class="ok">Yes</td><td class="ok">Re-encrypted (new session)</td></tr>
+      </tbody>
+    </table></div>
+    <p>The L4 model can route without decrypting because the hostname (<strong>SNI</strong>) rides in the ClientHello <em>in cleartext</em>, before encryption begins — <code>ssl_preread</code> peeks at it. This is also the only model that works for non-HTTP TLS (e.g. RDP), where there&rsquo;s no HTTP to read anyway.</p>
+    <div class="conf">Confidence: high on the three models and that SNI is cleartext (which is what <code>ssl_preread</code> exploits). Directive names (<code>ssl_preread</code>, <code>proxy_pass https://</code>, the <code>proxy_ssl_*</code> family) confirmed against current write-ups, but verify exact spelling/defaults on nginx.org before shipping.</div>
+  </section>
+
+  <!-- 8 RECREATE -->
+  <section id="recreate">
+    <p class="num">08</p>
+    <h2>Why &ldquo;recreate&rdquo; TLS — you can&rsquo;t forward a session</h2>
+    <p>This is the deepest point, and it answers &ldquo;why a whole new connection?&rdquo;</p>
+    <div class="box fact"><span class="lab">The literal truth</span>
+      <p>A TLS session is <strong>point-to-point between exactly two endpoints. You cannot forward, extend, or pass it on.</strong> The shared secret session key belongs to the client and NGINX <em>only</em> — the backend was never in that handshake and has none of those keys. So once NGINX terminates (decrypts), the client&rsquo;s session is over; there&rsquo;s nothing left to forward, just plaintext in NGINX&rsquo;s memory. To encrypt the next hop, NGINX must start a <strong>fresh handshake as a brand-new client</strong> to the backend — new keys, new session. That&rsquo;s why it&rsquo;s &ldquo;recreate,&rdquo; not &ldquo;forward.&rdquo;</p>
+    </div>
+    <pre class="ascii">   client <span class="c">══🔒 session A ═══►</span> NGINX <span class="c">══🔒 session B ═══►</span> backend
+            <span class="d">(keys: client+NGINX)</span>  opens A,  <span class="d">(keys: NGINX+backend —</span>
+                                 reads,    <span class="d"> a totally separate session)</span>
+                                 re-seals
+                                 as B</pre>
+    <div class="box analogy"><span class="lab">Analogy</span>
+      <p>The maître d&rsquo; opens the guest&rsquo;s sealed letter and reads the order. He can&rsquo;t just hand the kitchen that same envelope — it was sealed <em>to him</em>, and he already broke the seal to read it. So he <strong>writes the order on a fresh sheet and seals a new envelope</strong> for the runner. Decrypt-then-re-encrypt = <strong>TLS bridging</strong>.</p>
+    </div>
+  </section>
+
+  <!-- 9 CERTS -->
+  <section id="certs">
+    <p class="num">09</p>
+    <h2>Which certificate is used where</h2>
+    <p>There are <strong>two completely separate certificate relationships</strong>, and people conflate them constantly.</p>
+    <pre class="ascii">   ┌─ relationship 1: client ↔ NGINX ─┐   ┌─ relationship 2: NGINX ↔ backend ─┐
+   client <span class="c">═══🔒══►</span> NGINX                   NGINX <span class="c">═══🔒══►</span> backend
+          validates                              validates
+          NGINX's cert                           BACKEND's cert</pre>
+    <p><strong>Relationship 1 (public-facing):</strong> NGINX presents the public site certificate for <code>example.com</code>, issued by a <strong>publicly trusted CA</strong> (Let&rsquo;s Encrypt, DigiCert…). It <em>must</em> be publicly trusted — real browsers validate it.</p>
+    <p><strong>Relationship 2 (NGINX → backend):</strong> now <strong>NGINX is the client</strong> and the backend presents <em>its own</em> certificate. The freeing part: this cert does <strong>not</strong> need a public CA — it can be self-signed or from your <strong>internal CA</strong>, because only NGINX validates it (no browser ever sees it). It often carries an internal name like <code>backend.internal</code>. NGINX checks it with <code>proxy_ssl_verify on;</code> + <code>proxy_ssl_trusted_certificate</code>.</p>
+    <div class="box fact"><span class="lab">Optional but powerful &middot; mutual TLS (mTLS)</span>
+      <p>You can also make NGINX present a <strong>client certificate</strong> to the backend (<code>proxy_ssl_certificate</code> / <code>_key</code>), so the backend verifies <em>&ldquo;is this really my load balancer, or an impostor?&rdquo;</em> Now both sides prove identity — the backbone of zero-trust internal networks.</p>
+    </div>
+    <p><strong>Direct answer:</strong> on the backend hop, the backend uses its own (often internal/self-signed) server cert; NGINX optionally uses a separate client cert for mTLS. Neither is the public cert the browser saw.</p>
+  </section>
+
+  <!-- 10 FAIL CLOSED -->
+  <section id="failclosed">
+    <p class="num">10</p>
+    <h2>When something&rsquo;s wrong while decrypting</h2>
+    <p>The golden rule: <strong>TLS fails closed.</strong> There is no &ldquo;looks a bit off, I&rsquo;ll pass it anyway.&rdquo; Three failure points:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Where</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td><strong>(a) Handshake fails</strong><br>wrong/expired cert, untrusted CA, hostname mismatch, no shared cipher</td><td>TLS <strong>aborts with an alert</strong> (e.g. <code>certificate_expired</code>, <code>unknown_ca</code>, <code>handshake_failure</code>); <strong>no application data ever flows</strong>. Browser shows &ldquo;Your connection is not private.&rdquo;</td></tr>
+        <tr><td><strong>(b) Integrity check fails mid-stream</strong><br>a byte was altered/corrupted</td><td>TLS uses authenticated encryption (AEAD): every record carries an auth tag. A bad tag → <code>bad_record_mac</code> alert → connection <strong>torn down immediately</strong>. It will <em>never</em> hand over tampered plaintext.</td></tr>
+        <tr><td><strong>(c) Backend hop fails</strong><br><code>proxy_ssl_verify on</code> and backend cert is bad</td><td>NGINX refuses to talk to it and returns <strong>502 Bad Gateway</strong>. The client sees an error, never broken plaintext.</td></tr>
+      </tbody>
+    </table></div>
+    <p>The principle in one line: <strong>anything wrong → abort, never degrade. No partial trust, ever.</strong></p>
+    <div class="conf">Confidence: high. Those are real TLS alert types (RFC 8446 / 5246) and core AEAD behavior. The 502 mapping is standard NGINX upstream-failure handling.</div>
+  </section>
+
+  <!-- 11 KEYS -->
+  <section id="keys">
+    <p class="num">11</p>
+    <h2>How NGINX gets the private key (and a myth to kill)</h2>
+    <p>First, a precise correction people need: the <strong>server proves</strong> it owns its cert by <em>using</em> the private key; the <strong>client validates</strong> using the CA&rsquo;s <em>public</em> key and no secret of its own. Different jobs, different sides.</p>
+    <p>So where does NGINX get the private key? <strong>You put it there yourself, ahead of time. It&rsquo;s a local file.</strong> It was never generated by, sent over, or derived from the network.</p>
+    <pre class="ascii">   1. You (or certbot) GENERATE a key pair ON the server:
+         private key  →  /etc/nginx/example.com.key   <span class="d">(SECRET, stays put)</span>
+         public key   →  baked into a CSR (cert signing request)
+
+   2. You send the CSR (<span class="o">NOT</span> the private key) to a CA. It signs and returns:
+         certificate  →  /etc/nginx/example.com.crt   <span class="d">(public, shareable)</span>
+
+   3. Point NGINX at both:
+         ssl_certificate     /etc/nginx/example.com.crt;  <span class="d"># public, OK to share</span>
+         ssl_certificate_key /etc/nginx/example.com.key;  <span class="d"># SECRET, never leaves</span></pre>
+    <div class="box fact"><span class="lab">Cardinal rule</span>
+      <p>The private key is generated locally and <strong>never travels anywhere</strong> — not to the CA, not to the client, not across the wire. Only the certificate (containing the <em>public</em> key) is shared. A private key that crosses a network is considered compromised.</p>
+    </div>
+    <div class="box analogy"><span class="lab">Analogy</span>
+      <p>The private key is a unique <strong>engraved stamp die</strong> locked in NGINX&rsquo;s drawer. The certificate is a <strong>public notice</strong>: &ldquo;genuine example.com documents bear this stamp; the notary (CA) vouches.&rdquo; You forge the die once, locally; it never leaves the drawer. You only ever circulate the public notice.</p>
+    </div>
+  </section>
+
+  <!-- 12 SPOOF -->
+  <section id="spoof">
+    <p class="num">12</p>
+    <h2>Can anyone spoof? (and the public-cert myth)</h2>
+    <p>The most common misconception: <em>&ldquo;I&rsquo;ll just copy the public certificate and impersonate the site.&rdquo;</em> <strong>It fails, every time.</strong></p>
+    <pre class="ascii">   YOUR FAKE example.com server          VICTIM'S BROWSER
+   "Hi, I'm example.com!"          ◄──── "Prove it. Do the operation
+   [sends the COPIED public cert]        only example.com's PRIVATE
+                                          KEY can perform."
+   [you have the cert...
+    but NOT the private key.        ────► proof missing/invalid?
+    You CANNOT produce the proof.] <span class="r">x</span>    → CONNECTION REFUSED
+                                          "Your connection is not private"</pre>
+    <div class="box trap"><span class="lab">Name the trap</span>
+      <p>&ldquo;Public&rdquo; means <em>meant to be shared</em>, not <em>a secret that leaked</em>. The certificate is a public claim, designed to be copied to everyone. Its job isn&rsquo;t to be secret — it&rsquo;s to let anyone <strong>verify a proof</strong> that only the private-key holder can <em>generate</em>. Possessing the claim doesn&rsquo;t let you make the proof. Showing a photo of a lock doesn&rsquo;t open the door.</p>
+    </div>
+    <p><strong>The honest caveat:</strong> if you steal <em>both</em> the cert <em>and</em> the matching private key, you can impersonate the server — which is exactly why the private key is the crown jewel. But that requires breaching the server and exfiltrating a secret file that by design never travels — a break-in, not a copy-paste. Backstops still apply: Certificate Transparency (public logs of issued certs), revocation, and forward secrecy (a stolen key can&rsquo;t decrypt yesterday&rsquo;s captured traffic).</p>
+    <h4>The threat model, briefly</h4>
+    <ul style="margin:0 0 16px;padding-left:22px">
+      <li><strong>Spoof the server to a client?</strong> No (outsider) — needs a CA-signed cert <em>and</em> the private key.</li>
+      <li><strong>Eavesdrop on the path / passthrough?</strong> Sees metadata (the cleartext SNI = which site, packet sizes/timing) but can&rsquo;t read contents (encryption) or alter them undetected (integrity).</li>
+      <li><strong>The L7 box is an <em>authorized</em> man-in-the-middle.</strong> When NGINX terminates TLS it legitimately reads plaintext and holds the real key — so whoever compromises that box sees <em>all</em> plaintext. It&rsquo;s a concentration of trust; secure it like a vault. (This is also literally how corporate &ldquo;TLS inspection&rdquo; works.)</li>
+      <li><strong>Spoof the backend internally?</strong> Plain termination (plaintext hop) lets an internal attacker read <em>and</em> impersonate. Bridging with <code>proxy_ssl_verify on</code> (+ mTLS) blocks it. The classic mistake — bridging with verify <em>off</em> — gives encryption <strong>without</strong> authentication: a false sense of security.</li>
+    </ul>
+    <div class="conf">Confidence: high on the asymmetric-crypto guarantees and the authorized-MITM point. Verify the exact default of <code>proxy_ssl_verify</code> against nginx.org — defaults have differed across versions, which is precisely why &ldquo;encryption without verification&rdquo; is such a common trap.</div>
+  </section>
+
+  <!-- 13 SAAS -->
+  <section id="saas">
+    <p class="num">13</p>
+    <h2>The SaaS-user case — who provides the certificate?</h2>
+    <p>A natural but backwards leap: <em>&ldquo;I&rsquo;m a community manager using <code>mypanel.saas.com</code>; to make it safe, do I generate a cert and share the public half with the SaaS provider?&rdquo;</em> Let&rsquo;s untangle it.</p>
+    <div class="box trap"><span class="lab">Name the trap &middot; who is the &ldquo;server&rdquo;?</span>
+      <p>Everything hangs on this. <code>mypanel.saas.com</code> is the SaaS company&rsquo;s domain, their servers, their NGINX. <strong>They are the server; you are the client.</strong> The certificate for that hostname is <em>theirs</em> to generate and hold — that padlock you see on the portal is already their cert, already working. You generating one would be like printing a &ldquo;Genuine SaaS Co.&rdquo; stamp in your garage; no trusted CA would sign it for a domain you don&rsquo;t control. <strong>TLS certs secure a server&rsquo;s identity to its visitors — not a visitor&rsquo;s account on someone else&rsquo;s server.</strong></p>
+    </div>
+    <h4>So what actually keeps <em>your</em> access safe?</h4>
+    <p>A different layer entirely — authentication, not TLS: a <strong>strong unique password</strong> (+ password manager), <strong>MFA/2FA</strong>, verifying the <strong>exact real domain</strong> (anti-phishing), and <strong>SSO</strong> if offered. The TLS cert (theirs) secures the <em>pipe</em>; your password/MFA secures your <em>account</em>. Two different jobs.</p>
+    <h4>When would you generate a pair and share the public half?</h4>
+    <p>Your instinct is right in general — it&rsquo;s just a different situation, one where <em>you</em> prove identity to <em>them</em>. The giveaway is always: share the public half, never move the private half. Examples: <strong>SSH</strong> (public key on the server, private key on your laptop — probably what you were half-remembering); <strong>API request signing</strong> (upload a public key, sign with your private one); <strong>mTLS</strong> (register a client cert so a high-security portal verifies you cryptographically instead of by password). You&rsquo;d do this <em>only if the portal explicitly asks</em> — and even then your private key stays on your machine.</p>
+    <div class="conf">Confidence: high on the server-vs-client roles, who holds the cert for a hosted SaaS domain, and the TLS-vs-account-auth distinction. Whether a specific portal uses mTLS is product-specific — verify with the vendor.</div>
+  </section>
+
+  <!-- 14 GLOSSARY -->
+  <section id="glossary">
+    <p class="num">14</p>
+    <h2>Glossary (Part 2 terms)</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Term</th><th>One line</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Reverse proxy</strong></td><td>Server in front of app servers; forwards requests, hides backends</td></tr>
+        <tr><td><strong>Forward proxy</strong></td><td>Proxy in front of <em>clients</em>; hides them (corporate filter)</td></tr>
+        <tr><td><strong>L4 / L7</strong></td><td>Transport-layer (connections, 4-tuple) vs application-layer (requests, HTTP)</td></tr>
+        <tr><td><strong>4-tuple</strong></td><td>src IP, src port, dst IP, dst port — what L4 hashes on</td></tr>
+        <tr><td><strong>Consistent hashing</strong></td><td>Lets many LBs agree on a backend independently, with minimal disruption on change</td></tr>
+        <tr><td><strong>DSR</strong></td><td>Direct Server Return — backend replies straight to client, bypassing the LB outbound</td></tr>
+        <tr><td><strong>Sticky session</strong></td><td>Pin a user to one backend so their in-memory session survives</td></tr>
+        <tr><td><strong>TLS / SSL</strong></td><td>Encryption + authentication + integrity for a connection</td></tr>
+        <tr><td><strong>SNI</strong></td><td>Hostname in the ClientHello, sent in cleartext — lets L4 route without decrypting</td></tr>
+        <tr><td><strong>Passthrough / Termination / Bridging</strong></td><td>Forward sealed / decrypt to plaintext backend / decrypt then re-encrypt</td></tr>
+        <tr><td><strong>Certificate</strong></td><td>Public ID card binding a hostname to a public key, signed by a CA</td></tr>
+        <tr><td><strong>Private key</strong></td><td>The secret that proves cert ownership; never leaves the server</td></tr>
+        <tr><td><strong>CA</strong></td><td>Certificate Authority — the trusted notary that signs certs after validating domain control</td></tr>
+        <tr><td><strong>mTLS</strong></td><td>Both sides present certificates; mutual authentication</td></tr>
+        <tr><td><strong>AEAD</strong></td><td>Authenticated encryption — the tamper-evident seal; bad tag → connection killed</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- 15 RECALL -->
+  <section id="recall">
+    <p class="num">15</p>
+    <h2>Recall questions &amp; diffuse-mode seeds</h2>
+    <div class="box recall"><span class="lab">Retrieve it (cover the rest of the page first)</span>
+      <p>1. A bad-3G client takes 8s to send a request. Why is the app worker busy for milliseconds with NGINX in front, but 8 full seconds without it?<br>
+      2. You deploy gRPC behind an L4 network LB; one pod is at 95% CPU while two idle, yet &ldquo;connections are balanced.&rdquo; What&rsquo;s happening and what&rsquo;s the fix?<br>
+      3. GitHub runs an L4 director tier in front of its L7 proxy tier. Give the one operational reason. (Which tier changes hourly, and what does the L4 tier let them do safely?)<br>
+      4. Why can&rsquo;t NGINX &ldquo;forward&rdquo; the client&rsquo;s TLS session to the backend instead of doing a fresh handshake? (One sentence — about who holds the keys.)<br>
+      5. The browser shows a green padlock for example.com; the backend presents a <em>self-signed</em> cert for <code>backend.internal</code>. Why is that fine — and who&rsquo;d have screamed if the <em>client-facing</em> cert were self-signed?<br>
+      6. You copy example.com&rsquo;s public certificate onto your server. Why does impersonation still fail the instant a browser connects — what are you missing?<br>
+      7. For <code>mypanel.saas.com</code>: who generates the TLS cert, what does it make safe, and what separate mechanism actually stops someone logging in as you?</p>
+    </div>
+    <div class="box diffuse"><span class="lab">Diffuse-mode seeds &middot; chew on these</span>
+      <p>&bull; <strong>Consistent hashing:</strong> plain <code>hash(client) % N</code> seems fine — until N goes 4→5 and nearly <em>every</em> client remaps. Why does naive modulo fall apart on one node change, and what does consistent hashing do differently to keep most clients pinned? (Gateway to how LBs, caches, and sharded DBs survive scaling.)<br>
+      &bull; <strong>Health checks:</strong> active (ping on a schedule) vs passive (notice a failed request). What can active catch that passive can&rsquo;t — and who&rsquo;s the unlucky user whose request had to fail <em>first</em> under passive?<br>
+      &bull; <strong>ECH:</strong> SNI is cleartext, so anyone on the path sees <em>which site</em> you visit. Encrypted Client Hello (ECH) hides it — but then what happens to every L4 SNI-based passthrough router, and who&rsquo;s still positioned to route the traffic? <span style="color:var(--ink2)">(Verify ECH&rsquo;s current real-world deployment state — it was still rolling out as of early 2026.)</span><br>
+      &bull; <strong>The CA trust problem:</strong> your browser trusts hundreds of CAs, any one of which could issue a cert for your domain. So your bank&rsquo;s security depends on the <em>weakest</em> CA. How would you ever detect a fraudulently issued cert for your domain? (Gateway to Certificate Transparency.)<br>
+      &bull; <strong>Protecting the key:</strong> the private key is a plain file NGINX must read but that must never leak. How do serious shops square that? (File permissions → secret managers → HSMs that sign without revealing the key → short-lived certs &amp; rotation to shrink the blast radius of a leak.)</p>
+    </div>
+  </section>
+
+  <!-- REFS -->
+  <section id="refs">
+    <p class="num">&sect;</p>
+    <h2>References</h2>
+    <p style="color:var(--ink2);font-size:15px">Tier-1 sources: the relevant RFCs, official NGINX docs, and primary engineering blogs. Claims in §4 are paraphrased from these.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Topic</th><th>Source</th></tr></thead>
+      <tbody>
+        <tr><td>TLS 1.3 (handshake, alerts, AEAD, authentication)</td><td>RFC 8446 — <a href="https://www.rfc-editor.org/rfc/rfc8446">rfc-editor.org/rfc/rfc8446</a>; TLS 1.2: RFC 5246</td></tr>
+        <tr><td>ACME / domain-control validation (how CAs verify ownership)</td><td>RFC 8555 — <a href="https://www.rfc-editor.org/rfc/rfc8555">rfc-editor.org/rfc/rfc8555</a></td></tr>
+        <tr><td>Certificate Transparency</td><td>RFC 6962 — <a href="https://www.rfc-editor.org/rfc/rfc6962">rfc-editor.org/rfc/rfc6962</a></td></tr>
+        <tr><td>SSH public-key auth (the share-public/keep-private pattern)</td><td>RFC 4253</td></tr>
+        <tr><td>NGINX reverse proxy, <code>proxy_pass</code>, <code>proxy_ssl_*</code>, buffering</td><td><a href="https://nginx.org/en/docs/http/ngx_http_proxy_module.html">nginx.org · ngx_http_proxy_module</a></td></tr>
+        <tr><td>NGINX TLS, <code>ssl_certificate</code> / <code>_key</code></td><td><a href="https://nginx.org/en/docs/http/ngx_http_ssl_module.html">nginx.org · ngx_http_ssl_module</a></td></tr>
+        <tr><td>NGINX L4 / SNI passthrough (<code>stream</code>, <code>ssl_preread</code>)</td><td><a href="https://nginx.org/en/docs/stream/ngx_stream_ssl_preread_module.html">nginx.org · ngx_stream_ssl_preread_module</a></td></tr>
+        <tr><td>NGINX load balancing &amp; <code>upstream</code> (health checks, algorithms)</td><td><a href="https://nginx.org/en/docs/http/ngx_http_upstream_module.html">nginx.org · ngx_http_upstream_module</a></td></tr>
+        <tr><td>GitHub GLB — split L4/L7, DSR, DPDK, rendezvous hashing</td><td><a href="https://github.blog/engineering/infrastructure/glb-director-open-source-load-balancer/">github.blog · GLB</a></td></tr>
+        <tr><td>Cloudflare Unimog (L4LB), Spectrum (L4), Maglev (consistent hashing)</td><td><a href="https://blog.cloudflare.com/unimog-cloudflares-edge-load-balancer/">blog.cloudflare.com · Unimog</a> &amp; tag: load balancing</td></tr>
+        <tr><td>gRPC/HTTP-2 multiplexing trap, WebSockets, DB → L4</td><td>CloudRPS &amp; Gravitee L4-vs-L7 write-ups</td></tr>
+        <tr><td>&ldquo;Connections balanced, load wasn&rsquo;t&rdquo; post-mortem</td><td>&ldquo;The Speed Engineer&rdquo; (Medium)</td></tr>
+        <tr><td>NGINX TLS passthrough / termination / bridging configs</td><td>OneUptime, Smartango, dev.to (TLS termination models)</td></tr>
+      </tbody>
+    </table></div>
+    <div class="conf">Confidence calibration: <strong>high</strong> — TLS&rsquo;s three guarantees, the handshake structure, why a session can&rsquo;t be forwarded, the two cert relationships, fail-closed behavior, public-cert-≠-impersonation, the forward/reverse and L4/L7 distinctions, and the engineering-blog facts in §4. <strong>Verify before relying</strong> — exact NGINX directive spellings &amp; the default of <code>proxy_ssl_verify</code> (varies by version), the OSS-vs-NGINX-Plus line for active health checks and some algorithms, current ECH deployment state, and the precise TLS 1.2-vs-1.3 handshake message sequence. No throughput/latency numbers were asserted, as those are setup-specific.</div>
+  </section>
+
+  </main>
+
+  <footer>
+    NGINX in Production, Part 2 &middot; personal knowledge base &middot; companion to Part 1 (Fundamentals). Analogy is marked separately from fact throughout; where the analogy simplifies reality it says so. Verify the flagged items against the cited primary sources before shipping config.
+  </footer>
+
+</div>
+
+<script>
+  // ---- TLS handshake stepper ----
+  (function(){
+    var btn=document.getElementById('hsBtn'), cap=document.getElementById('hsCap');
+    if(!btn) return;
+    var steps=[
+      {b:'HB1',m:'H1',t:'<b>1 · ClientHello.</b> The browser says which host it wants and which ciphers it supports. The hostname (SNI) is sent in CLEARTEXT — which is exactly what an L4 passthrough router peeks at.'},
+      {b:'HB2',m:'H2',t:'<b>2 · ServerHello + Certificate.</b> The server sends its certificate (its public ID card) and key material.'},
+      {b:'HB3',m:null,t:'<b>3 · Client validates.</b> Is the cert signed by a CA I trust? Is it for the right hostname? Not expired? If any check fails, the browser aborts here.'},
+      {b:'HB4',m:'H4',t:'<b>4 · Key exchange.</b> Both sides derive the SAME secret session key — a key only these two endpoints possess. (This is why the session can&rsquo;t be forwarded to a backend.)'},
+      {b:'HB5',m:'H5',t:'<b>5 · Encrypted data flows.</b> From here on, everything is encrypted with that shared key. The lock is set.'}
+    ];
+    var playing=false;
+    function reset(){steps.forEach(function(s){document.getElementById(s.b).classList.remove('on');if(s.m)document.getElementById(s.m).classList.remove('on');});}
+    function run(){
+      if(playing)return;playing=true;reset();btn.textContent='\u25A0  Running\u2026';
+      var i=0;
+      (function next(){
+        if(i>0&&steps[i-1].m)document.getElementById(steps[i-1].m).classList.remove('on');
+        if(i>=steps.length){cap.innerHTML='<b>Connection established.</b> Both endpoints share a secret key; the backend was never part of it. Press play to replay.';btn.textContent='\u25B6  Replay handshake';playing=false;return;}
+        var s=steps[i];document.getElementById(s.b).classList.add('on');if(s.m)document.getElementById(s.m).classList.add('on');cap.innerHTML=s.t;i++;setTimeout(next,1500);
+      })();
+    }
+    btn.addEventListener('click',run);
+  })();
+
+  // ---- three TLS models toggle ----
+  (function(){
+    var models={
+      pass:{
+        L:{cls:'enc',lbl:'🔒 encrypted'}, R:{cls:'enc',lbl:'🔒 encrypted'},
+        lb:'reads SNI only<br>NO key · NO decrypt', be:'holds the key,<br>terminates TLS',
+        note:'<b>Passthrough (L4).</b> NGINX forwards the sealed envelope untouched and routes by the cleartext SNI; the backend terminates. <b>Win:</b> true end-to-end encryption — NGINX never sees plaintext. <b>Cost:</b> zero L7 visibility (no path routing, no WAF, no header injection). The only option for non-HTTP TLS like RDP. Note: this is really one client↔backend session passing through.'
+      },
+      term:{
+        L:{cls:'enc',lbl:'🔒 encrypted'}, R:{cls:'plain',lbl:'⚠ plaintext'},
+        lb:'decrypts · holds<br>cert+key · sees HTTP', be:'receives plain<br>HTTP',
+        note:'<b>Termination / offload (L7).</b> NGINX completes the handshake, decrypts, reads HTTP (full L7 power), and sends PLAINTEXT to the backend. <b>Win:</b> all L7 features + crypto offloaded from backends. <b>Cost:</b> the internal hop is unencrypted — fine on a trusted private network, a compliance failure across an untrusted one.'
+      },
+      bridge:{
+        L:{cls:'enc',lbl:'🔒 session A'}, R:{cls:'enc',lbl:'🔒 session B'},
+        lb:'decrypts (session A)<br>then RE-encrypts (B)', be:'holds its own<br>cert · terminates B',
+        note:'<b>Bridging / re-encryption (L7).</b> NGINX terminates session A (decrypts to inspect/route), then opens a brand-new session B to the backend (<code>proxy_pass https://</code>). <b>Win:</b> both L7 intelligence AND an encrypted internal hop. <b>Cost:</b> double the TLS work, and NGINX sees plaintext in memory for that moment — so it&rsquo;s a concentration of trust. Add <code>proxy_ssl_verify on</code> (+ mTLS) so a rogue internal backend can&rsquo;t impersonate the real one.'
+      }
+    };
+    var btns=document.querySelectorAll('.toggle');
+    var pipeL=document.getElementById('pipeL'),pipeR=document.getElementById('pipeR');
+    var pipeLlbl=document.getElementById('pipeLlbl'),pipeRlbl=document.getElementById('pipeRlbl');
+    var lbrole=document.getElementById('lbrole'),berole=document.getElementById('berole'),note=document.getElementById('stageNote');
+    function apply(key){
+      var m=models[key];
+      pipeL.className='pipe '+m.L.cls; pipeLlbl.innerHTML=m.L.lbl; pipeLlbl.className='lbl';
+      pipeR.className='pipe '+m.R.cls; pipeRlbl.innerHTML=m.R.lbl; pipeRlbl.className='lbl';
+      lbrole.innerHTML=m.lb; berole.innerHTML=m.be; note.innerHTML=m.note;
+    }
+    btns.forEach(function(b){b.addEventListener('click',function(){btns.forEach(function(x){x.classList.remove('active');});b.classList.add('active');apply(b.dataset.model);});});
+    apply('pass');
+  })();
+</script>
+</body>
+</html>
