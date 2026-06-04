@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NGINX Fundamentals â Knowledge Base</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f6f3ea; --paper2:#fffdf7; --paper3:#efe9da;
+    --ink:#211f1a; --ink2:#56534b; --ink3:#85817760;
+    --line:#e2dccd; --line2:#d4cdba;
+    --teal:#0f7b6c; --teal-bg:#e4f0ec; --teal-ink:#0a4f46;
+    --coral:#bb5128; --coral-bg:#f7e7de; --coral-ink:#7d3416;
+    --amber:#a9760f; --amber-bg:#f7eed6; --amber-ink:#6f4d07;
+    --purple:#544aad; --purple-bg:#eae8f6; --purple-ink:#332c75;
+    --red:#a8331f; --red-bg:#f8e3de;
+    --gray-bg:#ece7da;
+    --sans:'IBM Plex Sans',-apple-system,system-ui,sans-serif;
+    --serif:'Fraunces',Georgia,serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:var(--sans);font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;
+    grid-template-columns:230px 1fr;gap:48px;}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr;gap:0}}
+
+  /* ---- header ---- */
+  header.hero{grid-column:1/-1;padding:64px 0 36px;border-bottom:2px solid var(--ink);margin-bottom:8px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--teal);margin:0 0 14px}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(38px,6vw,68px);line-height:1.02;margin:0;letter-spacing:-.015em}
+  h1 em{font-style:italic;color:var(--coral)}
+  .lede{font-family:var(--serif);font-size:clamp(18px,2.4vw,23px);line-height:1.5;color:var(--ink2);max-width:46ch;margin:20px 0 24px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px}
+  .pill{font-family:var(--mono);font-size:12px;background:var(--paper3);border:1px solid var(--line2);
+    padding:5px 12px;border-radius:99px;color:var(--ink2)}
+
+  /* ---- nav ---- */
+  nav.toc{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:32px 0;font-size:13.5px}
+  @media(max-width:900px){nav.toc{position:static;height:auto;border-bottom:1px solid var(--line);padding:20px 0}}
+  nav.toc .t{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink2);margin:0 0 12px}
+  nav.toc a{display:block;color:var(--ink2);text-decoration:none;padding:5px 10px;border-left:2px solid transparent;
+    border-radius:0 6px 6px 0;line-height:1.35;margin-bottom:1px}
+  nav.toc a:hover{color:var(--ink);background:var(--paper3);border-left-color:var(--teal)}
+
+  /* ---- content ---- */
+  main{padding:36px 0 100px;min-width:0}
+  section{margin-bottom:64px;scroll-margin-top:24px}
+  .num{font-family:var(--mono);font-size:13px;color:var(--coral);letter-spacing:.1em}
+  h2{font-family:var(--serif);font-weight:600;font-size:clamp(27px,4vw,38px);line-height:1.1;
+    margin:6px 0 20px;letter-spacing:-.01em}
+  h3{font-family:var(--serif);font-weight:600;font-size:22px;margin:36px 0 10px;color:var(--ink)}
+  p{margin:0 0 16px}
+  a{color:var(--teal);text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
+  strong{font-weight:600}
+  code{font-family:var(--mono);font-size:.86em;background:var(--paper3);padding:2px 6px;border-radius:5px;border:1px solid var(--line)}
+  .lead{font-size:19px;color:var(--ink2)}
+
+  /* callouts */
+  .box{border-radius:var(--radius);padding:18px 20px;margin:20px 0;border:1px solid var(--line2);position:relative}
+  .box .lab{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    font-weight:500;display:inline-block;margin-bottom:8px}
+  .box p:last-child{margin-bottom:0}
+  .analogy{background:var(--amber-bg);border-color:#e8d6a6}.analogy .lab{color:var(--amber-ink)}
+  .fact{background:var(--teal-bg);border-color:#bcdcd4}.fact .lab{color:var(--teal-ink)}
+  .trap{background:var(--red-bg);border-color:#e6bdb2}.trap .lab{color:var(--red)}
+  .recall{background:var(--purple-bg);border-color:#cdc8ee}.recall .lab{color:var(--purple-ink)}
+  .diffuse{background:var(--paper2);border-color:var(--line2);border-style:dashed}.diffuse .lab{color:var(--ink2)}
+  .conf{font-size:13.5px;color:var(--ink2);font-style:italic;border-left:3px solid var(--line2);
+    padding:2px 0 2px 14px;margin:16px 0}
+
+  /* ascii diagrams */
+  pre.ascii{font-family:var(--mono);font-size:12.5px;line-height:1.45;background:#272521;color:#e9e3d4;
+    padding:18px 20px;border-radius:var(--radius);overflow-x:auto;margin:20px 0;border:1px solid #1a1814}
+  pre.ascii .c{color:#7fd3c0}.ascii .o{color:#e9a06a}.ascii .m{color:#b3acd9}.ascii .d{color:#888377}
+
+  /* tables */
+  .tbl{overflow-x:auto;margin:20px 0;border-radius:var(--radius);border:1px solid var(--line2)}
+  table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--paper2)}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;
+    background:var(--paper3);color:var(--ink2);font-weight:500;position:sticky;top:0}
+  tr:last-child td{border-bottom:none}
+  td code{font-size:.82em}
+  .ok{color:var(--teal);font-weight:600}.no{color:var(--coral);font-weight:600}
+
+  /* svg figure */
+  figure{margin:24px 0;background:var(--paper2);border:1px solid var(--line2);border-radius:var(--radius);padding:22px}
+  figure svg{display:block;width:100%;height:auto}
+  figcaption{font-size:13.5px;color:var(--ink2);margin-top:12px;text-align:center;font-style:italic}
+  .svgt{font-family:var(--sans);font-size:13px;font-weight:500;fill:var(--ink)}
+  .svgts{font-family:var(--sans);font-size:11px;fill:var(--ink2)}
+  .svgm{font-family:var(--mono);font-size:11px;fill:var(--ink2)}
+
+  /* epoll animation */
+  .epoll-demo{display:grid;grid-template-columns:1fr;gap:18px;margin:22px 0}
+  .fd-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .fd{aspect-ratio:1.4;border-radius:9px;background:var(--gray-bg);border:1px solid var(--line2);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;color:var(--ink3);
+    transition:background .35s,color .35s,box-shadow .35s,border-color .35s}
+  .fd.lit{background:var(--coral);color:#fff;border-color:var(--coral);box-shadow:0 0 0 3px var(--coral-bg)}
+  .ready-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--paper3);
+    border:1px dashed var(--line2);border-radius:10px;padding:12px 14px;font-family:var(--mono);font-size:12.5px;min-height:54px}
+  .ready-row .tag{background:var(--coral);color:#fff;padding:3px 9px;border-radius:6px;font-size:11px;animation:pop .3s ease}
+  @keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+
+  /* lifecycle player */
+  .player{margin:22px 0}
+  .player-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px}
+  button.play{font-family:var(--mono);font-size:13px;background:var(--ink);color:var(--paper);border:none;
+    padding:10px 20px;border-radius:9px;cursor:pointer;letter-spacing:.04em}
+  button.play:hover{background:var(--teal)}
+  .step-cap{font-size:14.5px;color:var(--ink2);min-height:24px;flex:1;min-width:220px}
+  .step-cap b{color:var(--ink)}
+  .badge circle{transition:fill .3s,r .3s}
+  .badge text{transition:fill .3s}
+  .badge.on circle{fill:var(--coral)}
+  .lifeline{transition:stroke .3s,stroke-width .3s,opacity .3s}
+  .lifeline.on{stroke-width:3 !important;opacity:1 !important}
+
+  footer{grid-column:1/-1;border-top:2px solid var(--ink);padding:28px 0 60px;font-size:13.5px;color:var(--ink2)}
+
+  @media(prefers-reduced-motion:reduce){
+    *{animation:none !important;transition:none !important;scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <p class="kicker">Visual-first learning &middot; Knowledge base</p>
+    <h1>NGINX <em>Fundamentals</em></h1>
+    <p class="lede">The front door of the modern web â why it exists, what it replaced, and the file-descriptor &amp; epoll machinery that lets one worker shepherd thousands of connections at once.</p>
+    <div class="meta">
+      <span class="pill">Level: beginner &rarr; mechanism</span>
+      <span class="pill">Anchor analogy: the restaurant</span>
+      <span class="pill">Facts cited inline</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <p class="t">Contents</p>
+    <a href="#big">1 &middot; The big picture</a>
+    <a href="#why">2 &middot; Why NGINX exists (C10k)</a>
+    <a href="#alts">3 &middot; Alternatives &amp; trade-offs</a>
+    <a href="#when">4 &middot; When to use / not use</a>
+    <a href="#htaccess">5 &middot; .htaccess explained</a>
+    <a href="#vs">6 &middot; .htaccess: NGINX vs HAProxy</a>
+    <a href="#cases">7 &middot; 12 real-world use cases</a>
+    <a href="#fd">8 &middot; File descriptors</a>
+    <a href="#epoll">9 &middot; epoll vs select/poll</a>
+    <a href="#mech">10 &middot; How epoll works</a>
+    <a href="#life">11 &middot; The request round trip</a>
+    <a href="#board">12 &middot; The board = an epoll instance</a>
+    <a href="#boards">13 &middot; Many boards = many workers</a>
+    <a href="#dragons">14 &middot; Here be dragons</a>
+    <a href="#glossary">15 &middot; Glossary</a>
+    <a href="#recall">16 &middot; Recall &amp; diffuse seeds</a>
+    <a href="#refs">References</a>
+  </nav>
+
+  <main>
+
+  <!-- 1 -->
+  <section id="big">
+    <p class="num">01</p>
+    <h2>The big picture</h2>
+    <p class="lead">NGINX (&ldquo;engine-x&rdquo;) is software that sits <strong>in front of</strong> your web application and is the first thing every incoming request hits.</p>
+    <p>It does a handful of front-door jobs â handing out static files itself, passing harder requests to your real application, spreading load across multiple app servers, caching answers, and terminating HTTPS â while juggling a huge number of simultaneous visitors.</p>
+    <div class="box analogy"><span class="lab">Anchor analogy &middot; the restaurant</span>
+      <p>NGINX is the <strong>maÃ®tre d&rsquo; / front-of-house host</strong> at the door. Guests are browsers, phones and API clients. The kitchens out back are your actual application servers. We reuse this one restaurant for the entire topic â one consistent model sticks; a pile of disconnected ones doesn&rsquo;t.</p>
+    </div>
+    <pre class="ascii">                      THE INTERNET  <span class="d">(a crowd of guests arriving)</span>
+          browser   phone    API client   browser
+             |        |           |           |
+             v        v           v           v
+   +-----------------------------------------------+
+   |                  N G I N X                     |   <span class="c">&lt;- the maitre d'</span>
+   |   - hands out static files itself (bread)      |
+   |   - routes harder requests to the back         |
+   |   - load-balances across kitchens              |
+   |   - caches, terminates TLS                      |
+   +-----------------------------------------------+
+             |             |              |
+             v             v              v
+      +-----------+  +-----------+  +-----------+
+      |  app srv  |  |  app srv  |  |  app srv  |       <span class="o">&lt;- the kitchens / chefs</span>
+      |  (Node)   |  |  (Python) |  |  (Ruby)   |
+      +-----------+  +-----------+  +-----------+</pre>
+    <p>One-liner: <strong>NGINX is the front door and traffic director for a web service.</strong></p>
+  </section>
+
+  <!-- 2 -->
+  <section id="why">
+    <p class="num">02</p>
+    <h2>Why NGINX exists â the C10k problem</h2>
+    <p>Rewind to the late 1990s / early 2000s. The dominant web server was <strong>Apache HTTP Server</strong>, and its classic model handled visitors with <strong>one dedicated worker (process, later thread) per connection.</strong></p>
+    <div class="box analogy"><span class="lab">Analogy</span>
+      <p>Imagine assigning <em>one personal waiter to each guest for their whole visit</em> â and that waiter just stands at the table while the guest reads the menu, chews, stares out the window. Each waiter costs a salary (memory) whether working or idle. With 50 guests, fine. With 10,000, the building can&rsquo;t hold the waiters. The restaurant collapses â not because the kitchen is slow, but because you ran out of room for <em>waiters</em>.</p>
+    </div>
+    <p>That failure has a name: <strong>the C10k problem</strong> â can one server handle ten thousand concurrent connections? Coined by Dan Kegel around 1999.</p>
+    <pre class="ascii">   OLD MODEL  <span class="d">(thread/process per connection - classic Apache)</span>
+
+   guest 1     --&gt;  worker 1   (idle, but holding memory + a stack)
+   guest 2     --&gt;  worker 2   (idle, blocked, waiting on the network)
+   guest 3     --&gt;  worker 3
+     :                 :
+   guest 10000 --&gt;  worker 10000   <span class="o">&lt;-- server falls over here</span>
+                                        <span class="d">not from CPU - from the</span>
+                                        <span class="d">overhead of 10k workers</span></pre>
+    <div class="box trap"><span class="lab">Name the trap</span>
+      <p>Most people assume a slow server is short on CPU or bandwidth. The C10k insight is the opposite â at high concurrency the bottleneck is <strong>per-connection overhead</strong> (memory per thread/process + the cost of the OS switching between thousands of them). The connections are mostly just <em>sitting there waiting</em> on a slow network, and you pay full price for every idle one.</p>
+    </div>
+    <p>Igor Sysoev wrote NGINX to solve exactly this for a large Russian site (Rambler); first released <strong>2004</strong>. The fix: <strong>a tiny number of workers â roughly one per CPU core â each watching thousands of connections and only doing work when a connection actually has something to do.</strong></p>
+    <pre class="ascii">   NEW MODEL  <span class="d">(event-driven, non-blocking - NGINX)</span>
+
+   guest 1  -+
+   guest 2  |
+   guest 3  +--&gt;  ONE waiter  --&gt; watches ALL tables at once;
+     :      |     (per CPU core)    springs into action only when
+   guest N  -+                       a table actually raises a hand</pre>
+    <div class="box fact"><span class="lab">Analogy stops here &middot; what&rsquo;s literally true</span>
+      <p>A real waiter can only watch so many tables. NGINX&rsquo;s &ldquo;watching&rdquo; is done by the operating system&rsquo;s event-notification machinery (<code>epoll</code> on Linux, <code>kqueue</code> on BSD/macOS), which is what makes &ldquo;watch thousands at once&rdquo; actually true. That machinery is the subject of sections 8&ndash;13.</p>
+    </div>
+    <div class="conf">Confidence: high on the C10k concept, NGINX&rsquo;s 2004 authorship by Sysoev, and the event-driven vs per-connection contrast. No specific memory figures given â those are illustrative and vary by setup.</div>
+  </section>
+
+  <!-- 3 -->
+  <section id="alts">
+    <p class="num">03</p>
+    <h2>The alternatives &amp; trade-offs</h2>
+    <p>NGINX is not the only front door in town. The real contenders, and where each one actually wins:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Tool</th><th>What it is</th><th>Sweet spot</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Apache HTTP Server</strong></td><td>The incumbent web server</td><td>Per-directory config (<code>.htaccess</code>), running app code in-process (mod_php), huge module ecosystem, shared hosting</td></tr>
+        <tr><td><strong>HAProxy</strong></td><td>Dedicated proxy / load balancer</td><td>Heavy-duty L4/L7 load balancing; fine-grained traffic control</td></tr>
+        <tr><td><strong>Caddy</strong></td><td>Modern web server (Go)</td><td><strong>Automatic HTTPS</strong> out of the box, dead-simple config</td></tr>
+        <tr><td><strong>Envoy</strong></td><td>Cloud-native proxy</td><td>Service meshes, dynamic discovery, rich observability (microservices)</td></tr>
+        <tr><td><strong>Traefik</strong></td><td>Modern reverse proxy (Go)</td><td>Auto-config from container labels (Docker/Kubernetes)</td></tr>
+        <tr><td><strong>Cloud LBs</strong> (AWS ALB/ELB&hellip;)</td><td>Managed service</td><td>&ldquo;I don&rsquo;t want to run a box at all&rdquo;</td></tr>
+        <tr><td><strong>Just your app server</strong></td><td>Node/Python serve HTTP directly</td><td>Tiny projects, local dev</td></tr>
+      </tbody>
+    </table></div>
+    <h3>The honest axes</h3>
+    <p><strong>NGINX vs Apache.</strong> NGINX wins on raw concurrency, static-file serving, and low-memory proxying. Apache wins on flexibility: <code>.htaccess</code> lets each directory carry its own config (great for shared hosting), and it can run application code <em>inside</em> the server process. NGINX deliberately has <strong>no <code>.htaccess</code> equivalent</strong> â all config is centralized. That&rsquo;s a feature (no per-request disk lookups) and a limitation (less convenient when you can&rsquo;t touch main config).</p>
+    <p><strong>NGINX vs HAProxy.</strong> HAProxy is a sharper <em>pure</em> load balancer with deeper traffic-shaping, but it won&rsquo;t serve static files or be a general web server. NGINX is the Swiss Army knife; HAProxy is the specialist scalpel.</p>
+    <p><strong>NGINX vs Caddy.</strong> Caddy gives automatic HTTPS with near-zero config. NGINX is more battle-tested and has a deeper ecosystem, at the cost of more setup.</p>
+    <p><strong>NGINX vs Envoy/Traefik.</strong> In a dynamic container/microservices world where backends appear and vanish, Envoy and Traefik were built for auto-discovery. NGINX can do it but it&rsquo;s not its native home.</p>
+    <div class="conf">Worth knowing: Apache later added an <strong>event MPM</strong> (a more NGINX-like model), default-ish in Apache 2.4 (~2012 â verify exact version if it matters). The gap is narrower today than the 2004 story suggests.</div>
+  </section>
+
+  <!-- 4 -->
+  <section id="when">
+    <p class="num">04</p>
+    <h2>When to use NGINX â and when not to</h2>
+    <h3>Reach for NGINX when</h3>
+    <p>You want a reverse proxy in front of one or more app servers; you serve a mix of static assets and dynamic responses; you need TLS termination; you want to load-balance across a handful of backends; or you want caching. In short: <strong>the default sensible front door for most web stacks.</strong></p>
+    <h3>Pick something else when</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Red flag</th><th>Better tool</th></tr></thead>
+      <tbody>
+        <tr><td>You want zero-config automatic HTTPS</td><td><strong>Caddy</strong></td></tr>
+        <tr><td>Service mesh with dynamic discovery + deep observability</td><td><strong>Envoy</strong> (often via Istio)</td></tr>
+        <tr><td>You depend on <code>.htaccess</code> / shared-hosting conventions</td><td><strong>Apache</strong></td></tr>
+        <tr><td>You need the most advanced load-balancing knobs</td><td><strong>HAProxy</strong></td></tr>
+        <tr><td>Tiny project, app server already serves HTTP fine</td><td>Add nothing â NGINX now is premature complexity</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- 5 -->
+  <section id="htaccess">
+    <p class="num">05</p>
+    <h2>What <code>.htaccess</code> actually is</h2>
+    <p><code>.htaccess</code> (&ldquo;hypertext access&rdquo;) is an <strong>Apache</strong> feature: a small config file you drop <em>inside a directory</em> of your site. It applies rules to that directory and everything below â URL rewrites, redirects, password-protecting a folder, blocking IPs, custom error pages.</p>
+    <div class="box analogy"><span class="lab">Analogy</span>
+      <p>A little <strong>house-rules card taped inside each room</strong> of the restaurant â &ldquo;members-only,&rdquo; &ldquo;send these guests upstairs.&rdquo; Anyone can write a card and tape it up without bothering management.</p>
+    </div>
+    <p>Why it exists: <strong>shared hosting.</strong> If you&rsquo;re one of 500 customers on a provider&rsquo;s Apache box, you can&rsquo;t touch the main server config â so <code>.htaccess</code> lets you configure <em>your</em> slice by dropping a file in <em>your</em> folder, no admin access, no restart.</p>
+    <pre class="ascii">   APACHE with .htaccess enabled - EVERY request for
+   /var/www/shop/cart/index.html makes Apache walk the path
+   and read a card in each room along the way:
+
+      /var/www/.htaccess           <span class="o">&lt;- read it</span>
+      /var/www/shop/.htaccess      <span class="o">&lt;- read it</span>
+      /var/www/shop/cart/.htaccess <span class="o">&lt;- read it</span>
+                                     <span class="d">...on EVERY request</span></pre>
+    <div class="box fact"><span class="lab">Fact</span>
+      <p>Apache&rsquo;s own documentation says: <strong>don&rsquo;t use <code>.htaccess</code> if you have access to the main config</strong> â for exactly this performance reason (re-reading cards on every request) plus security. <span style="color:var(--ink2)">(httpd.apache.org/docs/2.4/howto/htaccess.html, &ldquo;When (not) to use&rdquo;.)</span></p>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section id="vs">
+    <p class="num">06</p>
+    <h2><code>.htaccess</code>: NGINX vs HAProxy</h2>
+    <p>The twist: <strong>neither NGINX nor HAProxy has <code>.htaccess</code></strong> â it&rsquo;s an Apache concept. But <em>why</em> each lacks it is completely different, and that difference teaches you what each tool fundamentally <em>is</em>.</p>
+    <div class="tbl"><table>
+      <thead><tr><th></th><th>Serves files from directories?</th><th>Per-directory runtime config?</th><th>Where config lives</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Apache</strong></td><td class="ok">Yes</td><td class="ok">Yes â <code>.htaccess</code></td><td>Main config <strong>+</strong> scattered <code>.htaccess</code> cards</td></tr>
+        <tr><td><strong>NGINX</strong></td><td class="ok">Yes</td><td class="no">No, on purpose</td><td>One central config (<code>nginx.conf</code> + includes)</td></tr>
+        <tr><td><strong>HAProxy</strong></td><td class="no">No</td><td>N/A â concept doesn&rsquo;t apply</td><td>One central config (<code>haproxy.cfg</code>)</td></tr>
+      </tbody>
+    </table></div>
+    <div class="box trap"><span class="lab">Name the trap</span>
+      <p>Comparing NGINX and HAProxy <em>on <code>.htaccess</code></em> is a low-key category error. NGINX <em>is</em> a web server that serves files, so it had a real choice and <strong>deliberately refused</strong> the per-directory model: all rules go in centralized config, re-read only on an explicit reload (<code>nginx -s reload</code>), never per-request. HAProxy <strong>doesn&rsquo;t serve files at all</strong> â it&rsquo;s a pure proxy/load balancer with no document root. There are no &ldquo;rooms&rdquo; to tape cards in; the question doesn&rsquo;t even land on it.</p>
+    </div>
+    <p><strong>NGINX</strong> = &ldquo;No cards in rooms. One master rulebook at the door, memorized; re-memorized only when handed an update.&rdquo; Faster (no per-guest card-reading), less convenient (edit the master rulebook).</p>
+    <p><strong>HAProxy</strong> = the <strong>valet/dispatcher on the curb</strong> waving cars toward different restaurants. He has no dining room, so &ldquo;house-rules cards&rdquo; is a meaningless idea to him. <span style="color:var(--ink2)">(Tiny caveat: HAProxy can return a few canned error-page files via <code>errorfile</code>, but it has no document root or general static serving â so the <code>.htaccess</code> model still doesn&rsquo;t apply.)</span></p>
+  </section>
+
+  <!-- 7 -->
+  <section id="cases">
+    <p class="num">07</p>
+    <h2>12 real-world use cases: <code>.htaccess</code> &rarr; NGINX</h2>
+    <p>Same job, two filing systems. Syntax is illustrative â recognize the shape, look up exact flags when you ship.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>#</th><th>Goal</th><th>Apache <code>.htaccess</code> (module)</th><th>NGINX equivalent</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Password-protect a folder</td><td><code>Require valid-user</code> + <code>AuthUserFile</code> (mod_auth_basic)</td><td><code>auth_basic</code> + <code>auth_basic_user_file</code></td></tr>
+        <tr><td>2</td><td>301 redirect (old &rarr; new)</td><td><code>Redirect 301 /old /new</code> (mod_alias)</td><td><code>return 301 /new;</code></td></tr>
+        <tr><td>3</td><td>Force HTTPS</td><td><code>RewriteCond %{HTTPS} off</code> + <code>RewriteRule</code></td><td><code>return 301 https://$host$request_uri;</code></td></tr>
+        <tr><td>4</td><td>Pretty URLs / front-controller</td><td><code>RewriteRule . index.php</code> (mod_rewrite)</td><td><code>try_files $uri $uri/ /index.php?$args;</code></td></tr>
+        <tr><td>5</td><td>Custom error pages</td><td><code>ErrorDocument 404 /404.html</code></td><td><code>error_page 404 /404.html;</code></td></tr>
+        <tr><td>6</td><td>Block / allow IPs</td><td><code>Require not ip 1.2.3.4</code> (2.4)</td><td><code>deny 1.2.3.4;</code> / <code>allow ...;</code></td></tr>
+        <tr><td>7</td><td>Disable directory listing</td><td><code>Options -Indexes</code></td><td><code>autoindex off;</code> (already the NGINX default)</td></tr>
+        <tr><td>8</td><td>Browser cache lifetime</td><td><code>ExpiresByType image/png "access plus 30 days"</code></td><td><code>expires 30d;</code></td></tr>
+        <tr><td>9</td><td>Gzip compression</td><td><code>AddOutputFilterByType DEFLATE text/html</code></td><td><code>gzip on; gzip_types ...;</code></td></tr>
+        <tr><td>10</td><td>Hotlink protection</td><td><code>RewriteCond %{HTTP_REFERER} ...</code></td><td><code>valid_referers ...;</code> + <code>if ($invalid_referer)</code></td></tr>
+        <tr><td>11</td><td>Block bad bots</td><td><code>RewriteCond %{HTTP_USER_AGENT} BadBot</code></td><td><code>if ($http_user_agent ~* badbot){return 403;}</code></td></tr>
+        <tr><td>12</td><td>Security header (HSTS)</td><td><code>Header set Strict-Transport-Security ...</code></td><td><code>add_header Strict-Transport-Security "...";</code></td></tr>
+      </tbody>
+    </table></div>
+    <div class="box fact"><span class="lab">The structural constant across every row</span>
+      <p>The auth mechanism, redirect, gzip â these are <strong>HTTP-level ideas both servers implement</strong>. What changes in every single row is <strong>where the rule lives and when it&rsquo;s read</strong>: Apache reads <code>.htaccess</code> on <em>every request</em>; NGINX reads central config <em>once per reload</em>. Switching servers mostly means relearning the filing system, not the web concepts.</p>
+    </div>
+    <p>Two honest footnotes: <strong>#4 isn&rsquo;t a 1:1 translation</strong> â NGINX prefers <code>try_files</code> (does the file exist? else hand to the app) and treats <code>if</code>/<code>rewrite</code> as a last resort (see the famous &ldquo;If Is Evil&rdquo; community page). You rethink Apache rewrites into <code>try_files</code> rather than porting them. <strong>#7</strong>: directory listing is <em>work</em> to disable in Apache but is <strong>already off by default in NGINX</strong>.</p>
+    <div class="box recall"><span class="lab">Worked example &middot; HTTP Basic Auth</span>
+      <p>Both servers use a near-identical <code>.htpasswd</code>-style file because the underlying scheme is the same web standard: <strong>HTTP Basic Authentication, RFC 7617</strong>. Apache: tape <code>AuthType Basic</code> + <code>Require valid-user</code> inside <code>/admin</code>. NGINX: add a <code>location /admin/ { auth_basic ...; }</code> block to central config, then <code>nginx -s reload</code> once. Same auth standard, different filing system.</p>
+    </div>
+  </section>
+
+  <!-- 8 (FD) -->
+  <section id="fd">
+    <p class="num">08</p>
+    <h2>File descriptors â the foundation</h2>
+    <p>Before epoll makes sense, you need this brick. When you check a coat, they don&rsquo;t pass the actual coat back and forth â they give you a <strong>numbered ticket, &ldquo;#42.&rdquo;</strong> From then on you say &ldquo;42,&rdquo; not &ldquo;the navy wool one with the torn pocket.&rdquo; The number is a <em>handle</em> â a tiny stand-in for a big complicated thing.</p>
+    <p>A <strong>file descriptor</strong> (FD) is that ticket, inside a program on Linux. And the surprising part: on Linux <strong>almost everything is treated like a &ldquo;file&rdquo;</strong> â not just disk files, but network connections, your keyboard, the screen, pipes between programs. Each time a program opens one, the OS hands back a small integer (0, 1, 2, 3&hellip;). That integer is the file descriptor.</p>
+    <pre class="ascii">   THE COAT CHECK  <span class="d">(analogy)</span>        --&gt;   YOUR PROGRAM <span class="d">(real)</span>
+
+   "here's ticket #42"              --&gt;   open()/accept() returns FD 7
+   you hold ticket #42              --&gt;   program holds the integer 7
+   "fetch 42" (not "the navy coat") --&gt;   read(7) / write(7)
+   attendant knows what #42 is      --&gt;   kernel knows FD 7 =
+                                          "TCP connection to 1.2.3.4"</pre>
+    <p>So when a browser connects, NGINX gets back a file descriptor â say FD 7 â and that number now <em>means</em> &ldquo;this visitor&rsquo;s connection.&rdquo; 10,000 visitors = 10,000 tickets = file descriptors 7, 8, 9, &hellip; up into the thousands.</p>
+    <div class="box trap"><span class="lab">Myth to kill</span>
+      <p>&ldquo;File descriptor&rdquo; sounds like it&rsquo;s only about <em>files on disk</em>. It isn&rsquo;t â a network connection to a browser is <em>also</em> behind a file descriptor. That &ldquo;everything is a file&rdquo; design is <em>why</em> one mechanism can watch disk files and network connections alike.</p>
+    </div>
+    <div class="conf">Technical version: an FD is a non-negative integer index into a per-process table the kernel keeps; each entry points to an open &ldquo;file&rdquo; object (disk file, socket, pipe&hellip;). FDs 0/1/2 are conventionally standard in/out/error. Confidence: high â settled Unix/Linux fundamentals (open(2)).</div>
+  </section>
+
+  <!-- 9 epoll -->
+  <section id="epoll">
+    <p class="num">09</p>
+    <h2>epoll vs select/poll â watch many, pay for few</h2>
+    <p>NGINX is holding thousands of file descriptors. The question is: <em>which of them have something ready right now?</em> How you answer that is the whole ballgame.</p>
+    <h3>The naive way: walk the whole room (select / poll)</h3>
+    <div class="box analogy"><span class="lab">Analogy</span>
+      <p>The waiter wants to know which tables need service, so he <strong>physically walks past every table, every round, asking &ldquo;anything?&rdquo;</strong> â including the 9,995 idle ones. He spends all his energy <em>checking</em>, not <em>serving</em>.</p>
+    </div>
+    <p>That&rsquo;s literally <code>select()</code> / <code>poll()</code>: you hand the kernel your <em>whole</em> set of connections, it scans all of them, and you scan them again to find the ready ones. Cost grows with <strong>total</strong> connections â O(n) â on every call. (<code>select</code> also has a hard descriptor cap, commonly 1024.)</p>
+    <h3>The smart way: a bell system (epoll)</h3>
+    <div class="box analogy"><span class="lab">Analogy</span>
+      <p>Install a <strong>bell at every table.</strong> Tables ring when they need something. The kitchen hands the waiter <strong>a list of exactly which tables rang</strong> â nothing else. Idle tables cost zero attention. Add 5,000 more idle tables? His workload doesn&rsquo;t change â only the <em>ringing</em> ones do.</p>
+    </div>
+    <p>That&rsquo;s <code>epoll</code>, Linux&rsquo;s I/O event-notification mechanism (added in Linux 2.6, ~2002). You register FDs <strong>once</strong>; the kernel maintains a <strong>ready list</strong> behind the scenes; <code>epoll_wait</code> returns just the active ones. Cost scales with <strong>busy</strong> connections, not <strong>total</strong>.</p>
+
+    <h3 style="margin-top:30px">Watch it: idle FDs are free under epoll</h3>
+    <div class="epoll-demo">
+      <div class="fd-grid" id="fdGrid"></div>
+      <div class="ready-row" id="readyRow"><span style="color:var(--ink2)">epoll_wait() returns &rarr;&nbsp;</span></div>
+    </div>
+    <figcaption style="text-align:left">Twelve connections (file descriptors) registered on one epoll instance. Most sit idle and dark â costing nothing. Only the ones that &ldquo;ring&rdquo; (turn coral) land on the ready list that <code>epoll_wait</code> hands back. Add a thousand more dark cells and the work below doesn&rsquo;t change. <span style="color:var(--ink2)">(select/poll would have to scan all twelve â and all thousand â every call.)</span></figcaption>
+
+    <div class="box trap" style="margin-top:24px"><span class="lab">Name the trap</span>
+      <p>It&rsquo;s tempting to credit NGINX&rsquo;s speed to &ldquo;it&rsquo;s written in C&rdquo; or &ldquo;it&rsquo;s just optimized.&rdquo; That&rsquo;s not the core. The core is the <strong>algorithmic</strong> difference between O(active) and O(total): a beautifully optimized <code>select</code>-based server still degrades as idle connections pile up, because its cost model is wrong. NGINX wins by changing the cost model.</p>
+    </div>
+    <p>NGINX doesn&rsquo;t hard-code <code>epoll</code> â it auto-selects the best mechanism per OS:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>OS</th><th>Event mechanism</th></tr></thead>
+      <tbody>
+        <tr><td>Linux</td><td><code>epoll</code></td></tr>
+        <tr><td>FreeBSD / macOS</td><td><code>kqueue</code></td></tr>
+        <tr><td>Solaris</td><td><code>/dev/poll</code>, event ports</td></tr>
+        <tr><td>(fallback)</td><td><code>select</code> / <code>poll</code></td></tr>
+      </tbody>
+    </table></div>
+    <div class="conf">Confidence: high on what epoll is, the O(n)&rarr;O(active) shift, and per-OS auto-selection. Medium / please-verify: the exact <code>FD_SETSIZE</code> (~1024) and whether NGINX defaults to epoll&rsquo;s edge-triggered mode â both flagged rather than asserted.</div>
+  </section>
+
+  <!-- 10 mechanism -->
+  <section id="mech">
+    <p class="num">10</p>
+    <h2>How epoll works â the kernel does the noticing</h2>
+    <p>The crucial thing: <code>epoll</code> is <strong>passive</strong>. It is <em>not</em> running around poking each connection. The thing doing the noticing is the <strong>kernel</strong> (the OS itself), while NGINX is busy elsewhere.</p>
+    <pre class="ascii">   When data comes back on a connection:
+
+   1. data packet arrives at the network card
+   2. the kernel's networking code: "this belongs to socket FD 7"
+   3. kernel drops the data in FD 7's receive buffer and
+      flips a flag: "FD 7 is now READY to read"
+   4. because FD 7 is registered with the epoll instance,
+      the kernel adds FD 7 to that instance's READY LIST
+   5. NGINX calls epoll_wait()  --&gt;  kernel hands back: [ 7 ]
+   6. NGINX: "oh, FD 7 has data" and reads it</pre>
+    <p>Steps 1&ndash;4 happen on their own while NGINX does nothing. By the time NGINX calls <code>epoll_wait</code>, the answer is <em>already sitting there</em>. NGINX doesn&rsquo;t search â it collects. The three commands:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Call</th><th>Plain English</th><th>When</th></tr></thead>
+      <tbody>
+        <tr><td><code>epoll_create1()</code></td><td>set up my bell-board</td><td>once</td></tr>
+        <tr><td><code>epoll_ctl()</code></td><td>wire up / unwire a table&rsquo;s bell (add/remove an FD)</td><td>connection opens or closes</td></tr>
+        <tr><td><code>epoll_wait()</code></td><td>show me which bells are ringing right now</td><td>the hot loop</td></tr>
+      </tbody>
+    </table></div>
+    <div class="box recall"><span class="lab">Direction matters</span>
+      <p>epoll doesn&rsquo;t get &ldquo;attached&rdquo; to connections â <strong>connections get registered onto the epoll instance</strong> via <code>epoll_ctl(EPOLL_CTL_ADD)</code>. The board is the thing; FDs are added to it.</p>
+    </div>
+  </section>
+
+  <!-- 11 lifecycle -->
+  <section id="life">
+    <p class="num">11</p>
+    <h2>The complete request round trip</h2>
+    <p>Now the payoff â one full request, browser knocks to browser answered. Notice both the browser&rsquo;s connection (FD 7) and the backend&rsquo;s connection (FD 51) live on the <em>same</em> epoll instance. One worker, one board, both directions. <strong>Press play to step through 1 &rarr; 7.</strong></p>
+
+    <figure class="player">
+      <svg viewBox="0 0 680 470" role="img" aria-label="A request flowing through NGINX: browser and backend both outside the machine; inside, the NIC receives data, the kernel marks the relevant file descriptor ready on the epoll ready list, and the NGINX worker collects ready descriptors via epoll_wait.">
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+
+        <!-- external boxes -->
+        <rect x="70" y="40" width="150" height="48" rx="9" fill="var(--teal-bg)" stroke="var(--teal)" stroke-width="1"/>
+        <text class="svgt" x="145" y="61" text-anchor="middle" fill="var(--teal-ink)">browser</text>
+        <text class="svgts" x="145" y="78" text-anchor="middle" fill="var(--teal-ink)">the guest &middot; FD 7</text>
+
+        <rect x="460" y="40" width="150" height="48" rx="9" fill="var(--coral-bg)" stroke="var(--coral)" stroke-width="1"/>
+        <text class="svgt" x="535" y="61" text-anchor="middle" fill="var(--coral-ink)">backend</text>
+        <text class="svgts" x="535" y="78" text-anchor="middle" fill="var(--coral-ink)">the kitchen &middot; FD 51</text>
+
+        <!-- machine container -->
+        <rect x="36" y="122" width="600" height="320" rx="20" fill="none" stroke="var(--line2)" stroke-width="1.2" stroke-dasharray="5 5"/>
+        <text class="svgts" x="56" y="144">your server machine &mdash; one worker, one CPU core</text>
+
+        <!-- NIC -->
+        <rect x="80" y="164" width="520" height="44" rx="9" fill="var(--gray-bg)" stroke="var(--line2)"/>
+        <text class="svgt" x="340" y="181" text-anchor="middle">network card (NIC)</text>
+        <text class="svgts" x="340" y="198" text-anchor="middle">the one physical door &mdash; all traffic in and out</text>
+
+        <!-- kernel -->
+        <rect x="80" y="244" width="520" height="90" rx="9" fill="var(--gray-bg)" stroke="var(--line2)"/>
+        <text class="svgt" x="340" y="266" text-anchor="middle">kernel &mdash; epoll ready list</text>
+        <text class="svgts" x="340" y="283" text-anchor="middle">the bell-board: holds only FDs ready right now</text>
+        <rect x="190" y="299" width="140" height="26" rx="13" fill="var(--teal-bg)" stroke="var(--teal)"/>
+        <text class="svgm" x="260" y="316" text-anchor="middle" fill="var(--teal-ink)">FD 7 &middot; browser</text>
+        <rect x="350" y="299" width="150" height="26" rx="13" fill="var(--coral-bg)" stroke="var(--coral)"/>
+        <text class="svgm" x="425" y="316" text-anchor="middle" fill="var(--coral-ink)">FD 51 &middot; backend</text>
+
+        <!-- worker -->
+        <rect x="190" y="372" width="300" height="48" rx="9" fill="var(--purple-bg)" stroke="var(--purple)"/>
+        <text class="svgt" x="340" y="392" text-anchor="middle" fill="var(--purple-ink)">NGINX worker</text>
+        <text class="svgts" x="340" y="409" text-anchor="middle" fill="var(--purple-ink)">calls epoll_wait(), then reads / writes</text>
+
+        <!-- lifelines (ids for stepper) -->
+        <line id="L1" class="lifeline" x1="120" y1="92" x2="120" y2="162" stroke="var(--teal)" stroke-width="1.5" opacity=".4" marker-end="url(#ar)"/>
+        <line id="L7" class="lifeline" x1="175" y1="162" x2="175" y2="92" stroke="var(--teal)" stroke-width="1.5" opacity=".4" marker-end="url(#ar)"/>
+        <line id="L4" class="lifeline" x1="505" y1="162" x2="505" y2="92" stroke="var(--coral)" stroke-width="1.5" opacity=".4" marker-end="url(#ar)"/>
+        <line id="L5" class="lifeline" x1="560" y1="92" x2="560" y2="162" stroke="var(--coral)" stroke-width="1.5" opacity=".4" marker-end="url(#ar)"/>
+        <line id="L2" class="lifeline" x1="300" y1="210" x2="300" y2="242" stroke="var(--ink2)" stroke-width="1.5" opacity=".4" marker-end="url(#ar)"/>
+        <line id="L3" class="lifeline" x1="300" y1="370" x2="300" y2="338" stroke="var(--ink2)" stroke-width="1.5" opacity=".4" marker-end="url(#ar)"/>
+        <line id="L6" class="lifeline" x1="350" y1="370" x2="350" y2="338" stroke="var(--ink2)" stroke-width="1.5" opacity=".4" marker-end="url(#ar)"/>
+
+        <!-- badges -->
+        <g class="badge" id="B1"><circle cx="120" cy="127" r="11" fill="var(--ink3)"/><text x="120" y="131" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#fff">1</text></g>
+        <g class="badge" id="B7"><circle cx="175" cy="127" r="11" fill="var(--ink3)"/><text x="175" y="131" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#fff">7</text></g>
+        <g class="badge" id="B4"><circle cx="505" cy="127" r="11" fill="var(--ink3)"/><text x="505" y="131" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#fff">4</text></g>
+        <g class="badge" id="B5"><circle cx="560" cy="127" r="11" fill="var(--ink3)"/><text x="560" y="131" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#fff">5</text></g>
+        <g class="badge" id="B2"><circle cx="300" cy="226" r="11" fill="var(--ink3)"/><text x="300" y="230" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#fff">2</text></g>
+        <g class="badge" id="B3"><circle cx="300" cy="354" r="11" fill="var(--ink3)"/><text x="300" y="358" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#fff">3</text></g>
+        <g class="badge" id="B6"><circle cx="350" cy="354" r="11" fill="var(--ink3)"/><text x="350" y="358" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#fff">6</text></g>
+      </svg>
+      <div class="player-bar">
+        <button class="play" id="playBtn">&#9654;&nbsp; Play round trip</button>
+        <div class="step-cap" id="cap">Press play to trace one request from browser to backend and back.</div>
+      </div>
+    </figure>
+
+    <div class="tbl"><table>
+      <thead><tr><th>Step</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><strong>Browser knocks.</strong> Request lands on the NIC; this connection is <code>FD 7</code>.</td></tr>
+        <tr><td>2</td><td><strong>Kernel notices, not NGINX.</strong> It buffers the data, flips FD 7&rsquo;s ready flag, puts it on the epoll ready list.</td></tr>
+        <tr><td>3</td><td><strong>epoll_wait collects.</strong> Returns <code>[FD 7]</code>; the worker reads the request.</td></tr>
+        <tr><td>4</td><td><strong>Worker forwards upstream.</strong> Opens <code>FD 51</code> to the backend, sends the request, then <em>goes back to watching the board</em> â it does not freeze.</td></tr>
+        <tr><td>5</td><td><strong>Backend answers.</strong> Result arrives at the NIC; kernel marks <code>FD 51</code> ready.</td></tr>
+        <tr><td>6</td><td><strong>epoll_wait collects again.</strong> Returns <code>[FD 51]</code>; the worker reads the result.</td></tr>
+        <tr><td>7</td><td><strong>Worker replies.</strong> Writes the response out to <code>FD 7</code>; the browser has its answer.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="box fact"><span class="lab">Two honest caveats so the diagram doesn&rsquo;t lie</span>
+      <p><strong>The analogy stops here:</strong> FD 51&rsquo;s traffic to the backend <em>also</em> re-enters the kernel and exits via the NIC â there&rsquo;s no separate door. The sides are split only so both FDs are visible. <br><br><strong>Step 5 hides a fork:</strong> if the backend is slow, the worker doesn&rsquo;t wait at step 4 â it parks FD 51 on the board and serves everyone else. That &ldquo;don&rsquo;t block, register and move on&rdquo; behaviour is <strong>non-blocking I/O</strong>, and it&rsquo;s what keeps steps 4&rarr;6 from freezing the dining room.</p>
+    </div>
+  </section>
+
+  <!-- 12 board -->
+  <section id="board">
+    <p class="num">12</p>
+    <h2>&ldquo;The board&rdquo; = an epoll instance</h2>
+    <p>The board is an <strong>epoll instance</strong>, created with <code>epoll_create1()</code>. The twist that should make you grin: <strong>the board is itself a file descriptor.</strong> Create one and the kernel hands you back&hellip; an FD referring to it. The bell-board gets its own ticket number, just like every connection.</p>
+    <p>Inside that one instance, the kernel keeps <strong>two lists</strong> (the real terms):</p>
+    <pre class="ascii">   ONE epoll instance (one board) = one FD, holding two lists:
+
+   +- epoll instance (itself FD 12) ---------------+
+   |  <span class="c">INTEREST LIST</span>  (everything I'm watching)      |
+   |     FD 7   FD 8   FD 9 ... FD 51 ... FD 4287   |
+   |                                                |
+   |  <span class="o">READY LIST</span>  (only what's ringing now)         |
+   |     FD 7   FD 51        <span class="d">&lt;- epoll_wait returns these</span>
+   +------------------------------------------------+</pre>
+    <p>The <strong>interest list</strong> is everything you&rsquo;ve registered via <code>epoll_ctl</code> (&ldquo;all the tables whose bells I&rsquo;m wired to watch&rdquo;). The <strong>ready list</strong> is the subset ready right now (&ldquo;the bells currently ringing&rdquo;) â and <code>epoll_wait</code> pulls from that one.</p>
+    <div class="conf">Confidence: high. From epoll(7): &ldquo;epoll_create() creates a new epoll instance and returns a file descriptor referring to that instance.&rdquo;</div>
+  </section>
+
+  <!-- 13 boards -->
+  <section id="boards">
+    <p class="num">13</p>
+    <h2>Can there be many boards? Yes â one per worker</h2>
+    <p><strong>Sense 1 (trivial):</strong> nothing stops a program from calling <code>epoll_create1()</code> several times; each is an independent instance with its own interest/ready lists.</p>
+    <p><strong>Sense 2 (the NGINX reality):</strong> NGINX runs as <strong>one master process + several worker processes</strong>, typically <strong>one worker per CPU core</strong> (<code>worker_processes auto;</code>). <strong>Each worker has its own epoll instance.</strong></p>
+    <pre class="ascii">   4 cores  --&gt;  4 workers  --&gt;  4 boards  <span class="d">(NOT 4000 boards for 4000 connections)</span>
+
+   Worker 1 (core 1)        Worker 2 (core 2)
+   +- board A (FD) -+        +- board B (FD) -+
+   | FD 7, 9, 22... |        | FD 8, 15, 51...|
+   +----------------+        +----------------+
+
+   Worker 3 (core 3)        Worker 4 (core 4)
+   +- board C ------+        +- board D ------+
+   | FD 11, 30...   |        | FD 13, 41...   |
+   +----------------+        +----------------+</pre>
+    <div class="box analogy"><span class="lab">Analogy</span>
+      <p>The dining room has <strong>4 waiters, one per section, each with their own bell-board</strong> watching only <em>their</em> tables. A given table&rsquo;s bell is wired to exactly <strong>one</strong> waiter&rsquo;s board â not all four.</p>
+    </div>
+    <div class="box trap"><span class="lab">Carve this in stone</span>
+      <p>Number of boards &asymp; number of workers (&asymp; number of CPU cores) â <strong>NOT</strong> number of connections. Each connection is a ticket on exactly <em>one</em> board. Thousands of FDs, a handful of boards.</p>
+    </div>
+    <div class="conf">Confidence: high on the master/worker model and one epoll-per-worker. Exact worker count depends on <code>worker_processes</code> and core count â <code>auto</code> ties it to cores, but an admin can override. Footnote: because the board is itself an FD, you can even nest one epoll inside another â real, occasionally used, not a beginner concern.</div>
+  </section>
+
+  <!-- 14 dragons -->
+  <section id="dragons">
+    <p class="num">14</p>
+    <h2>Here be dragons â edges, wrinkles, open threads</h2>
+    <p>The clean model above is true, but reality has texture. These are the known wrinkles, flagged honestly so you know where to dig later.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Wrinkle</th><th>The short version</th><th>Confidence</th></tr></thead>
+      <tbody>
+        <tr><td><strong>The slow-disk asymmetry</strong></td><td>Network sockets are non-blocking, but disk reads on Linux have historically been <em>blocking</em> in a way sockets aren&rsquo;t. A giant file off a slow disk can stall a worker. This is why <code>sendfile</code>, <code>aio</code>, and thread pools exist in NGINX.</td><td>Concept high; verify specifics per version/OS</td></tr>
+        <tr><td><strong>Non-blocking I/O</strong></td><td>The reason a worker doesn&rsquo;t freeze on a slow backend: it registers the FD and moves on, returning when the bell rings. The load-bearing behaviour behind the whole event loop.</td><td>High</td></tr>
+        <tr><td><strong>Edge- vs level-triggered</strong></td><td>epoll has two notification modes; edge-triggered fires only at the <em>moment</em> state changes. Fairly confident NGINX uses edge-triggered by default â treat as &ldquo;verify against nginx.org&rdquo; rather than settled.</td><td>Medium â flagged</td></tr>
+        <tr><td><strong>Accept mutex / SO_REUSEPORT</strong></td><td>When 1,000 connections arrive at once, how are they divided among the workers&rsquo; boards so one isn&rsquo;t slammed while others nap? A real coordination fight over &ldquo;who grabs the new guest at the door.&rdquo;</td><td>Real mechanism; worth a focused read</td></tr>
+        <tr><td><strong>FD limits</strong></td><td>FDs are handed out as small integers â and a process can run out. The &ldquo;open file descriptor limit&rdquo; (<code>ulimit -n</code>) is a classic way a busy server falls over. Ties straight back to C10k.</td><td>High</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- 15 glossary -->
+  <section id="glossary">
+    <p class="num">15</p>
+    <h2>Quick-reference glossary</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Term</th><th>In one line</th><th>Restaurant analogy</th></tr></thead>
+      <tbody>
+        <tr><td><strong>NGINX</strong></td><td>Front-door web server / reverse proxy</td><td>The maÃ®tre d&rsquo;</td></tr>
+        <tr><td><strong>C10k problem</strong></td><td>Can one server handle 10,000 concurrent connections?</td><td>10,000 guests, not enough waiters</td></tr>
+        <tr><td><strong>Reverse proxy</strong></td><td>Sits in front of app servers, forwards requests</td><td>Host routing guests to kitchens</td></tr>
+        <tr><td><strong>Upstream / backend</strong></td><td>Your actual application server</td><td>The kitchen / chefs</td></tr>
+        <tr><td><strong>File descriptor (FD)</strong></td><td>Small integer naming one open connection/file</td><td>The coat-check ticket</td></tr>
+        <tr><td><strong>select / poll</strong></td><td>Old O(n) readiness check â scans everything</td><td>Walking past every table</td></tr>
+        <tr><td><strong>epoll</strong></td><td>Linux O(active) readiness mechanism â ready list</td><td>The bell-board</td></tr>
+        <tr><td><strong>epoll instance</strong></td><td>The board itself; an FD holding interest + ready lists</td><td>One waiter&rsquo;s bell-board</td></tr>
+        <tr><td><strong>kqueue</strong></td><td>epoll&rsquo;s equivalent on BSD / macOS</td><td>A different brand of bell-board</td></tr>
+        <tr><td><strong>worker process</strong></td><td>One event loop, typically one per CPU core</td><td>One waiter per section</td></tr>
+        <tr><td><strong>non-blocking I/O</strong></td><td>Register and move on instead of waiting</td><td>Don&rsquo;t stand frozen at one table</td></tr>
+        <tr><td><strong>.htaccess</strong></td><td>Apache per-directory config, read every request</td><td>House-rules card taped in a room</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- 16 recall -->
+  <section id="recall">
+    <p class="num">16</p>
+    <h2>Recall questions &amp; diffuse-mode seeds</h2>
+    <p>Active recall beats re-reading. Cover the answers and try these cold.</p>
+    <div class="box recall"><span class="lab">Retrieve it</span>
+      <p>1. What specifically &ldquo;ran out&rdquo; first in the old thread-per-connection model, and what&rsquo;s the one-sentence trick NGINX uses instead?<br>
+      2. A developer on cheap shared hosting wants to password-protect one folder with no access to main config â which of Apache/NGINX/HAProxy lets them, and what&rsquo;s the per-request cost?<br>
+      3. When a browser connects, what does NGINX hold that represents it? Why don&rsquo;t 5,000 idle new connections slow the worker â what is epoll <em>not</em> doing with their tickets?<br>
+      4. In the round trip, between step 4 (request sent) and step 6 (result read), what is the worker doing? (Not standing at FD 51 tapping its foot.)<br>
+      5. On an 8-core server with <code>worker_processes auto;</code>, roughly how many epoll boards exist â and does a new connection register onto all of them or just one?</p>
+    </div>
+    <div class="box diffuse"><span class="lab">Diffuse-mode seeds &middot; chew on these away from the screen</span>
+      <p>&bull; If NGINX&rsquo;s superpower is <em>not</em> a worker per connection, what happens when one request asks it to do something genuinely slow and blocking â like reading a giant file off a slow disk? (&rarr; the slow-disk asymmetry, <code>sendfile</code>/<code>aio</code>/thread pools.)<br>
+      &bull; Each worker has its own board and a connection sticks to one worker â so when 1,000 connections arrive in one second, how do they get divided so one worker isn&rsquo;t slammed while others nap? (&rarr; accept mutex / <code>SO_REUSEPORT</code>.)<br>
+      &bull; FDs are small integers handed out low â could a slammed server <em>run out of numbers</em>? (&rarr; the open file-descriptor limit; the other face of C10k.)<br>
+      &bull; Apache re-reads <code>.htaccess</code> every request; NGINX reads config once per reload. Who would actually <em>prefer</em> the slower &ldquo;re-read every time&rdquo; behaviour â and why does that explain why <code>.htaccess</code> still exists?</p>
+    </div>
+  </section>
+
+  <!-- refs -->
+  <section id="refs">
+    <p class="num">&sect;</p>
+    <h2>References</h2>
+    <p style="color:var(--ink2);font-size:15px">A verification trail. Prefer tier-1 sources (the spec, official docs) over blogs.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Topic</th><th>Source</th></tr></thead>
+      <tbody>
+        <tr><td>The C10k problem</td><td>Dan Kegel, <em>The C10K problem</em> â <a href="http://www.kegel.com/c10k.html">kegel.com/c10k.html</a></td></tr>
+        <tr><td>NGINX architecture &amp; history</td><td><em>The Architecture of Open Source Applications</em>, Vol. II, &ldquo;nginx&rdquo; (Andrew Alexeev) â <a href="https://aosabook.org/en/v2/nginx.html">aosabook.org</a>; &ldquo;Inside NGINX&rdquo; â <a href="https://www.nginx.com/blog/inside-nginx-how-we-designed-for-performance-scale/">nginx.com</a></td></tr>
+        <tr><td>NGINX official docs</td><td><a href="https://nginx.org/en/docs/">nginx.org/en/docs</a> â event methods, <code>events</code>/<code>use</code>, <code>auth_basic</code>, <code>autoindex</code>, proxy modules</td></tr>
+        <tr><td>&ldquo;If Is Evil&rdquo; / rewrite conversion</td><td><a href="https://nginx.org/en/docs/http/converting_rewrite_rules.html">nginx.org converting rewrite rules</a></td></tr>
+        <tr><td>epoll API</td><td>Linux man pages: <a href="https://man7.org/linux/man-pages/man7/epoll.7.html">epoll(7)</a>, epoll_create(2), epoll_ctl(2) â man7.org</td></tr>
+        <tr><td>select / poll (O(n) behaviour)</td><td>Linux man pages: select(2), poll(2) â man7.org</td></tr>
+        <tr><td>File descriptors &amp; &ldquo;everything is a file&rdquo;</td><td>Linux man pages: open(2); foundational Unix design â man7.org</td></tr>
+        <tr><td>Apache <code>.htaccess</code> &amp; MPMs</td><td><a href="https://httpd.apache.org/docs/2.4/howto/htaccess.html">httpd.apache.org/docs/2.4/howto/htaccess.html</a>; <a href="https://httpd.apache.org/docs/2.4/mpm.html">mpm.html</a></td></tr>
+        <tr><td>HTTP Basic Authentication</td><td>RFC 7617, <em>The &lsquo;Basic&rsquo; HTTP Authentication Scheme</em> â <a href="https://www.rfc-editor.org/rfc/rfc7617">rfc-editor.org</a></td></tr>
+      </tbody>
+    </table></div>
+    <div class="conf">Confidence calibration carried from the lesson: <strong>high</strong> â C10k concept, NGINX 2004/Sysoev/Rambler, event-driven vs per-connection, epoll being an FD with interest/ready lists, one-epoll-per-worker, FD fundamentals. <strong>Verify before relying</strong> â exact Apache event-MPM version, <code>FD_SETSIZE</code> (~1024), whether NGINX defaults to edge-triggered epoll, and any specific syntax/flags. No memory figures or benchmarks were asserted; none were reliable.</div>
+  </section>
+
+  </main>
+
+  <footer>
+    NGINX Fundamentals &middot; personal knowledge base &middot; built from a visual-first mentoring session. Analogy is marked separately from fact throughout; where the analogy simplifies reality it says so. Verify flagged items against the cited primary sources before shipping config.
+  </footer>
+
+</div>
+
+<script>
+  // ---- epoll bell-board animation ----
+  (function(){
+    var grid = document.getElementById('fdGrid');
+    var ready = document.getElementById('readyRow');
+    if(!grid) return;
+    var N = 12, cells = [];
+    for(var i=0;i<N;i++){
+      var d = document.createElement('div');
+      d.className='fd'; d.textContent='FD '+(7+i);
+      grid.appendChild(d); cells.push(d);
+    }
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function clearTags(){ ready.querySelectorAll('.tag').forEach(function(t){t.remove();}); }
+    function tick(){
+      cells.forEach(function(c){c.classList.remove('lit');});
+      clearTags();
+      var lit = [];
+      for(var i=0;i<N;i++){ if(Math.random() < 0.18){ cells[i].classList.add('lit'); lit.push(7+i); } }
+      if(lit.length===0){ lit.push(7); cells[0].classList.add('lit'); }
+      lit.forEach(function(fd){
+        var t=document.createElement('span'); t.className='tag'; t.textContent='FD '+fd; ready.appendChild(t);
+      });
+    }
+    tick();
+    if(!reduce){ setInterval(tick, 1900); }
+  })();
+
+  // ---- request lifecycle stepper ----
+  (function(){
+    var btn = document.getElementById('playBtn');
+    var cap = document.getElementById('cap');
+    if(!btn) return;
+    var steps = [
+      {b:'B1',l:'L1',t:'<b>1 &middot; Browser knocks.</b> The request lands on the NIC. This connection is FD 7.'},
+      {b:'B2',l:'L2',t:'<b>2 &middot; Kernel notices (not NGINX).</b> It buffers the data and puts FD 7 on the epoll ready list.'},
+      {b:'B3',l:'L3',t:'<b>3 &middot; epoll_wait collects.</b> Returns [FD 7]. The worker reads the request.'},
+      {b:'B4',l:'L4',t:'<b>4 &middot; Worker forwards upstream.</b> Opens FD 51 to the backend, sends the request &mdash; then goes back to watching the board.'},
+      {b:'B5',l:'L5',t:'<b>5 &middot; Backend answers.</b> The result arrives at the NIC; the kernel marks FD 51 ready.'},
+      {b:'B6',l:'L6',t:'<b>6 &middot; epoll_wait collects again.</b> Returns [FD 51]. The worker reads the result.'},
+      {b:'B7',l:'L7',t:'<b>7 &middot; Worker replies.</b> Writes the response out to FD 7 &mdash; the browser has its answer.'}
+    ];
+    var playing = false;
+    function reset(){
+      steps.forEach(function(s){
+        document.getElementById(s.b).classList.remove('on');
+        document.getElementById(s.l).classList.remove('on');
+      });
+    }
+    function run(){
+      if(playing) return; playing = true; reset();
+      btn.textContent = '\u25A0  Running\u2026';
+      var i = 0;
+      function next(){
+        if(i>0){
+          // dim previous lifeline but keep badge lit
+          document.getElementById(steps[i-1].l).classList.remove('on');
+        }
+        if(i>=steps.length){
+          cap.innerHTML = '<b>Round trip complete.</b> Both FD 7 and FD 51 rode the same epoll board. Press play again to replay.';
+          btn.textContent = '\u25B6  Replay round trip';
+          playing = false; return;
+        }
+        var s = steps[i];
+        document.getElementById(s.b).classList.add('on');
+        document.getElementById(s.l).classList.add('on');
+        cap.innerHTML = s.t;
+        i++;
+        setTimeout(next, 1150);
+      }
+      next();
+    }
+    btn.addEventListener('click', run);
+  })();
+</script>
+</body>
+</html>
