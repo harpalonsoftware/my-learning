@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANN &amp; Vector Databases — explained the way it should be</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;800&family=Caveat:wght@500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f3ead9; --paper-2:#ece0c9;
+    --ink:#2a2420; --ink-soft:#5b5246;
+    --blue:#2c5d86; --teal:#2c8f7f; --coral:#d8503a; --mustard:#e0a32e;
+    --line:rgba(42,36,32,.14); --card:#fbf5e9; --shadow:6px 7px 0 rgba(42,36,32,.13);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Hanken Grotesk',sans-serif;font-size:18px;line-height:1.65;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:26px 26px;overflow-x:hidden;}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.4;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.045'/%3E%3C/svg%3E");
+    mix-blend-mode:multiply;}
+  .wrap{max-width:860px;margin:0 auto;padding:0 22px;position:relative;z-index:2}
+  h1,h2,h3{font-family:'Fraunces',serif;line-height:1.05;font-weight:900;letter-spacing:-.01em}
+  h2{font-size:clamp(28px,5vw,44px);margin:0 0 6px}
+  h3{font-size:clamp(20px,3.4vw,27px);font-weight:600;margin:0 0 10px}
+  p{margin:0 0 16px}
+  a{color:var(--blue)}
+  .mono{font-family:'JetBrains Mono',monospace}
+  .hand{font-family:'Caveat',cursive;font-size:1.42em;line-height:1.15;color:var(--coral)}
+  strong{font-weight:800}
+  .find{color:var(--blue);font-weight:800}
+  .write{color:var(--teal);font-weight:800}
+  .src{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-soft)}
+
+  header{padding:64px 0 30px;text-align:center}
+  .kicker{font-family:'Caveat',cursive;font-size:30px;color:var(--coral);transform:rotate(-3deg);display:inline-block;margin-bottom:6px}
+  header h1{font-size:clamp(36px,8vw,72px);font-weight:900;margin:0}
+  header h1 em{font-style:italic;color:var(--blue)}
+  .sub{font-size:clamp(17px,2.4vw,21px);color:var(--ink-soft);max-width:620px;margin:18px auto 0}
+  .crumb{font-family:'JetBrains Mono';font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-top:14px}
+  .scrollcue{margin-top:30px;font-family:'Caveat',cursive;font-size:24px;color:var(--ink-soft);animation:bob 1.8s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}
+
+  section{padding:46px 0;border-top:2px dashed var(--line)}
+  .step-tag{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#fff;background:var(--ink);padding:5px 11px;border-radius:3px;margin-bottom:14px;transform:rotate(-1deg)}
+  .step-tag.why{background:var(--coral)} .step-tag.how{background:var(--blue)} .step-tag.trap{background:var(--coral)}
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  .card{background:var(--card);border:2px solid var(--ink);border-radius:10px;box-shadow:var(--shadow);padding:22px 24px;margin:22px 0}
+  .note{border-left:6px solid var(--mustard);background:#fbf3df;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0;font-size:16.5px}
+  .note b{color:#9a6f12}
+  .trap{border:2px solid var(--coral);background:#fdeee9;border-radius:10px;padding:18px 22px;margin:22px 0;box-shadow:4px 5px 0 rgba(216,80,58,.22)}
+  .trap .lbl{font-family:'Caveat',cursive;font-size:26px;color:var(--coral);display:block;margin-bottom:2px}
+  .fact{border:2px dotted var(--teal);background:#eef7f4;border-radius:10px;padding:16px 20px;margin:20px 0;font-size:16px}
+  .fact .lbl{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--teal);font-weight:700}
+
+  table.cmp{width:100%;border-collapse:collapse;margin:22px 0;font-size:15.5px;background:var(--card);border:2px solid var(--ink);border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
+  table.cmp th,table.cmp td{padding:11px 13px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  table.cmp th{background:var(--ink);color:#fff;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+  table.cmp tr:last-child td{border-bottom:none}
+  table.cmp td:first-child{font-weight:800}
+  .win{color:var(--teal);font-weight:700} .lose{color:var(--coral);font-weight:700}
+
+  pre.ascii{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.5;background:#262019;color:#f3ead9;border-radius:10px;padding:18px 16px;overflow-x:auto;box-shadow:var(--shadow);margin:20px 0}
+  pre.ascii .b{color:#7fb2dd} pre.ascii .t{color:#6fd8c4} pre.ascii .y{color:#f0c061} pre.ascii .r{color:#f08a72} pre.ascii .dim{color:#8a7f6e}
+
+  .btn{display:block;margin:24px auto 0;font-family:'Hanken Grotesk';font-weight:800;font-size:16px;background:var(--mustard);color:var(--ink);border:2px solid var(--ink);border-radius:30px;padding:11px 26px;cursor:pointer;box-shadow:3px 4px 0 var(--ink);transition:transform .1s}
+  .btn:active{transform:translate(3px,4px);box-shadow:none}
+
+  /* split reveal (librarian vs writer) */
+  .split{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:stretch;margin:14px 0 6px}
+  .tile{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(15px,4vw,22px);padding:14px 18px;border:2px solid var(--ink);border-radius:8px;background:#fff;position:relative;transition:transform .5s ease,background .5s ease,color .5s ease}
+  .tile .role{position:absolute;left:0;right:0;bottom:-28px;font-family:'Caveat',cursive;font-size:18px;text-align:center;opacity:0;transition:opacity .5s ease .3s;color:var(--ink)}
+  .split.go .tile.a{background:var(--blue);color:#fff;transform:translateY(-6px)}
+  .split.go .tile.b{background:var(--teal);color:#fff;transform:translateY(10px)}
+  .split.go .tile .role{opacity:1}
+
+  /* flip-card recall */
+  .retrieve{background:#262019;color:var(--paper);border-radius:12px;padding:20px 24px;margin:24px 0;box-shadow:var(--shadow)}
+  .retrieve .brain{font-family:'Caveat',cursive;color:var(--mustard);font-size:22px}
+  .retrieve .q{font-family:'Fraunces';font-weight:600;font-size:20px;margin-bottom:4px}
+  .retrieve .ans{max-height:0;overflow:hidden;transition:max-height .5s ease;color:#d8cdb8;font-size:16px}
+  .retrieve .ans.open{max-height:700px;margin-top:12px}
+  .revealbtn{margin-top:12px;font-family:'Hanken Grotesk';font-weight:700;font-size:14px;background:var(--mustard);color:var(--ink);border:none;border-radius:20px;padding:8px 18px;cursor:pointer}
+
+  /* ANN explorer */
+  .annwrap{background:var(--card);border:2px solid var(--ink);border-radius:14px;box-shadow:var(--shadow);padding:22px;margin:22px 0}
+  .annwrap svg{width:100%;max-width:420px;display:block;margin:0 auto;height:auto;cursor:crosshair;border-radius:10px;background:#262019}
+  .ctrlrow{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;margin:16px 0 6px}
+  .pbtn{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;border:2px solid var(--ink);background:#fff;color:var(--ink);border-radius:8px;padding:7px 11px;cursor:pointer;transition:all .15s}
+  .pbtn.active{background:var(--blue);color:#fff;transform:translateY(-2px);box-shadow:0 4px 0 rgba(44,93,134,.4)}
+  .ctrllbl{font-family:'JetBrains Mono';font-size:13px;color:var(--ink-soft);font-weight:700}
+  .slider{width:170px;accent-color:var(--coral);vertical-align:middle}
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0 4px}
+  .stat{text-align:center;background:var(--paper-2);border-radius:8px;padding:10px 4px}
+  .stat .n{font-family:'Fraunces';font-weight:900;font-size:clamp(18px,4.5vw,27px);line-height:1;color:var(--blue)}
+  .stat .l{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);font-weight:600;margin-top:4px}
+  .verdict{text-align:center;font-family:'Caveat',cursive;font-size:24px;margin-top:8px;min-height:30px}
+  .verdict.hit{color:var(--teal)} .verdict.miss{color:var(--coral)}
+  .annhint{text-align:center;font-family:'Caveat',cursive;font-size:19px;color:var(--ink-soft);margin-top:4px}
+
+  /* brute vs ann scan */
+  .scan{background:var(--card);border:2px solid var(--ink);border-radius:14px;box-shadow:var(--shadow);padding:20px}
+  .lane{margin:10px 0}
+  .lane h4{font-family:'Fraunces';font-weight:600;font-size:15px;margin:0 0 6px;display:flex;justify-content:space-between}
+  .lane h4 .tm{font-family:'JetBrains Mono';font-size:13px;color:var(--coral)}
+  .dots{display:flex;flex-wrap:wrap;gap:4px}
+  .sd{width:16px;height:16px;border-radius:4px;background:#e7ddc8;border:1px solid var(--ink);transition:background .1s,transform .1s}
+  .sd.chk{background:var(--mustard)} .sd.hit{background:var(--teal);transform:scale(1.25)} .sd.skip{opacity:.25}
+
+  /* timeline */
+  .tlbtns{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 14px;justify-content:center}
+  .tlbtn{font-family:'JetBrains Mono';font-weight:700;font-size:13px;border:2px solid var(--ink);background:#fff;border-radius:30px;padding:8px 14px;cursor:pointer;transition:all .15s;color:var(--ink)}
+  .tlbtn.active{background:var(--coral);color:#fff;transform:translateY(-2px);box-shadow:0 4px 0 rgba(216,80,58,.35)}
+  .tldetail{background:var(--card);border:2px solid var(--ink);border-radius:12px;box-shadow:var(--shadow);padding:20px 22px;min-height:150px}
+  .tldetail .yr{font-family:'Fraunces';font-weight:900;font-size:30px;color:var(--blue);line-height:1}
+  .tldetail .nm{font-family:'Fraunces';font-weight:600;font-size:20px;margin:2px 0 8px}
+  .tldetail .solved{font-size:16px;margin:0 0 10px}
+  .tldetail .wild{font-size:15px;color:var(--ink-soft);border-left:4px solid var(--teal);padding-left:12px;margin:0 0 8px}
+  .tldetail .cite{font-family:'JetBrains Mono';font-size:11.5px;color:var(--ink-soft)}
+  .tlfade{animation:tlf .5s ease}
+  @keyframes tlf{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  details{background:var(--card);border:2px solid var(--ink);border-radius:10px;margin:12px 0;overflow:hidden;box-shadow:3px 4px 0 rgba(42,36,32,.1)}
+  summary{cursor:pointer;padding:16px 20px;font-weight:800;font-size:17px;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"+";font-family:'JetBrains Mono';font-size:24px;color:var(--coral);transition:transform .2s}
+  details[open] summary::after{transform:rotate(45deg)}
+  details .body{padding:0 20px 18px;font-size:16px;color:var(--ink-soft)}
+
+  .ucgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+  @media(max-width:600px){.ucgrid{grid-template-columns:1fr}}
+  .uc{background:var(--card);border:2px solid var(--ink);border-radius:10px;padding:16px 18px;box-shadow:4px 5px 0 rgba(42,36,32,.12)}
+  .uc h4{font-family:'Fraunces';font-weight:600;font-size:18px;margin:0 0 6px}
+  .uc .mono{font-size:13px;color:var(--blue);font-weight:700}
+  .uc p{font-size:15px;margin:6px 0 0;color:var(--ink-soft)}
+  .uc.no{box-shadow:4px 5px 0 rgba(216,80,58,.18)} .uc.no .mono{color:var(--coral)}
+
+  .refs{font-size:14.5px;line-height:1.7;padding-left:0;list-style:none} .refs li{margin-bottom:9px}
+  .refs .tag{font-family:'JetBrains Mono';font-size:11px;background:var(--ink);color:#fff;padding:2px 7px;border-radius:4px;margin-right:6px}
+
+  footer{text-align:center;padding:50px 0 70px;border-top:2px dashed var(--line)}
+  .seed{background:var(--blue);color:#fff;border-radius:14px;padding:26px;box-shadow:var(--shadow);text-align:left}
+  .seed .lbl{font-family:'Caveat',cursive;font-size:26px;color:var(--mustard)}
+  .seed h3{color:#fff;margin:4px 0 10px}
+  .made{font-family:'Caveat',cursive;font-size:20px;color:var(--ink-soft);margin-top:30px}
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <span class="kicker">find the needle in 5 million haystacks ✎</span>
+  <h1>ANN &amp; <em>vector databases</em></h1>
+  <p class="sub">How you find the nearest vectors among millions without checking them all — the supermarket-aisle way — plus what a vector database really is, where it came from, and who does what in RAG. Every claim sourced.</p>
+  <div class="crumb">part 2 · picks up where the embeddings page left off</div>
+  <div class="scrollcue">scroll down ↓</div>
+</header>
+
+<main class="wrap">
+
+  <!-- 01 BIG PICTURE -->
+  <section class="reveal">
+    <span class="step-tag">01 · the big picture</span>
+    <h2>The only thing ANN is about</h2>
+    <p>You've stored 5 million chunk-vectors. A question arrives, already a vector. You need the closest ones. The dumb way: measure the distance to <strong>all 5 million</strong>, every query — correct, but slow. <strong>ANN (Approximate Nearest Neighbour) is just: organise the vectors ahead of time so you only ever check a small handful, not all of them.</strong> A <strong>vector database</strong> is the software product that stores your vectors and runs that fast search for you.</p>
+    <pre class="ascii">   <span class="dim">BRUTE FORCE</span>                        <span class="dim">ANN</span>
+   check ALL 5,000,000      vs       check only a few thousand
+   ●●●●●●●●●●●●●●●●●●●●●●             <span class="t">●●●</span> <span class="dim">(skip the rest)</span>
+   slow, but exact                   fast, but might miss one</pre>
+    <div class="scan" id="scan">
+      <div class="lane"><h4>Brute force — check every item <span class="tm" id="btm"></span></h4><div class="dots" id="bdots"></div></div>
+      <div class="lane"><h4>ANN — open one aisle, check only those <span class="tm" id="atm"></span></h4><div class="dots" id="adots"></div></div>
+      <button class="btn" id="scanbtn">▶ run both searches</button>
+    </div>
+    <div class="fact"><span class="lbl">literally true</span><br>Brute-force search is a linear scan — its cost grows with the number of vectors. Trading exactness for speed is the founding idea of approximate nearest-neighbour search. <span class="src">(Indyk &amp; Motwani, "Approximate Nearest Neighbors: Towards Removing the Curse of Dimensionality," STOC 1998.)</span></div>
+  </section>
+
+  <!-- 02 WHY -->
+  <section class="reveal">
+    <span class="step-tag why">02 · why this exists</span>
+    <h2>Feel the pain: the random pile</h2>
+    <p>Imagine a giant supermarket where every product is dumped in <strong>one random pile</strong> on the floor. You want milk — you'd pick up and check <em>every single item</em>. That's brute force: it works, and it gets worse the bigger the store. So real shops <strong>organise into aisles</strong>: you walk to dairy and ignore the other 40 aisles — 30 items checked instead of 30,000.</p>
+    <table class="cmp">
+      <tr><th></th><th>Random pile (brute force)</th><th>Aisles (ANN)</th></tr>
+      <tr><td>Speed</td><td class="lose">slow — check everything</td><td class="win">fast — check one aisle</td></tr>
+      <tr><td>Correctness</td><td class="win">always finds the true nearest</td><td class="lose"><em>almost</em> always</td></tr>
+      <tr><td>Good when</td><td>small store</td><td>huge store</td></tr>
+    </table>
+    <p>The trade: by only visiting the dairy aisle you might <strong>miss</strong> a milk-based product shelved elsewhere. That small risk of missing is the <strong>"Approximate"</strong> in ANN — you accept "I'll <em>usually</em> find the best matches" for "I'm done in a heartbeat."</p>
+    <div class="note"><b>Why no clean exact shortcut?</b> In high-dimensional space, the tricks that make 2-D nearest-neighbour fast mostly collapse — the "curse of dimensionality" — which is exactly why approximate search is the practical answer at scale. <span class="src">(Indyk &amp; Motwani, STOC 1998.)</span></div>
+    <div class="trap"><span class="lbl">when NOT to bother</span>If your store is tiny — a few thousand vectors — <b>just use the random pile.</b> Brute force is instant at small scale; ANN earns its complexity only when checking everything gets slow. Standing up a vector database for 10,000 chunks is buying a forklift to carry one grocery bag.</div>
+    <div class="retrieve">
+      <span class="brain">↻ quick recall</span>
+      <div class="q">You make the aisles bigger and fewer — 3 giant aisles instead of 40. You still visit one aisle per trip. Faster or slower? And more or less likely to find the right item?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans"><b>Slower</b> (each big aisle holds more items to check) but <b>more likely to find it</b> (coarse aisles rarely misfile a dairy item elsewhere). Fewer/bigger = safer but slower; more/smaller = faster but riskier. That see-saw is the whole tuning story.</div>
+    </div>
+  </section>
+
+  <!-- 03 ANCHOR -->
+  <section class="reveal">
+    <span class="step-tag how">03 · the anchor</span>
+    <h2>One analogy, all the way down</h2>
+    <p class="hand" style="text-align:center">A supermarket. Random pile = check everything.<br>Aisles = organise so you only open the aisle you need.</p>
+    <p style="text-align:center;color:var(--ink-soft)">Every "how" below is just: how are aisles built, how many do you open, and what's the running shop around them.</p>
+  </section>
+
+  <!-- 04 THE DIAL (centerpiece) -->
+  <section class="reveal">
+    <span class="step-tag how">04 · the speed↔find dial</span>
+    <h2>Tune the aisles yourself</h2>
+    <p>This is the one knob that matters. Pick how many <strong>aisles</strong> the store is split into, and how many of the nearest aisles you <strong>open per trip</strong>. Watch two things move in opposite directions: <span class="find">comparisons</span> (speed) and whether you actually <span class="write">found the true nearest</span>. Click anywhere in the store to move the <span style="color:var(--coral);font-weight:800">query</span>.</p>
+
+    <div class="annwrap">
+      <svg viewBox="0 0 320 320" id="annsvg" aria-label="ANN aisle explorer"></svg>
+      <div class="ctrlrow">
+        <span class="ctrllbl">aisles:</span>
+        <button class="pbtn" data-k="4">4</button>
+        <button class="pbtn" data-k="8">8</button>
+        <button class="pbtn" data-k="16">16</button>
+        <span class="ctrllbl" style="margin-left:10px">open nearest:</span>
+        <input type="range" min="1" max="4" value="1" class="slider" id="npslider">
+        <span class="ctrllbl mono" id="npval">1</span>
+      </div>
+      <div class="statgrid">
+        <div class="stat"><div class="n" id="acomp">–</div><div class="l">comparisons</div></div>
+        <div class="stat"><div class="n" id="abrute">120</div><div class="l">brute force</div></div>
+        <div class="stat"><div class="n" id="aspeed">–</div><div class="l">speedup</div></div>
+      </div>
+      <div class="verdict" id="averdict"></div>
+      <div class="annhint">try <b>4 aisles, open 1</b> → you miss the true nearest (it's just across an aisle line). Now slide "open nearest" up to rescue it.</div>
+    </div>
+    <div class="fact"><span class="lbl">how to read this</span><br>This is an illustrative 2-D toy "store" of 120 points. The clustering (k-means), the true nearest-neighbour, and which aisles get opened are all <em>computed live and exactly</em> on these points — only the low dimensionality is a simplification. Real systems use hundreds of dimensions and smarter indexes, but the speed-vs-finding trade-off behaves the same way. "Open nearest = N" is the real tuning knob (called <span class="mono">nprobe</span> in FAISS's IVF index). <span class="src">(IVF / inverted-file partitioning: Johnson, Douze &amp; Jégou, "Billion-scale similarity search with GPUs," FAISS, 2017 — arXiv:1702.08734.)</span></div>
+    <div class="retrieve">
+      <span class="brain">↻ predict</span>
+      <div class="q">You set "open nearest = 1" and the query sits right on the border between two aisles. What's the risk, and which setting protects you?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans">The true nearest item may sit in the <em>neighbouring</em> aisle you didn't open → you <b>miss</b> it. Opening the nearest 2–3 aisles covers the border cases and rescues recall — at the cost of more comparisons. That's the dial, in one move.</div>
+    </div>
+  </section>
+
+  <!-- 05 HOW AISLES ARE BUILT -->
+  <section class="reveal">
+    <span class="step-tag how">05 · how items get an aisle</span>
+    <h2>The store sorts itself, by similarity</h2>
+    <p><b>Analogy beat.</b> Nobody hand-sorts 5 million items. Before any shopping (offline — the "build the library once" step), you let similar vectors <strong>clump into groups</strong>, draw a boundary around each clump = an aisle, and plant a <strong>signpost</strong> at each: the average position of everything in it (a <em>centroid</em>).</p>
+    <pre class="ascii"> <span class="t">BUILD TIME (once):</span> similar vectors clump → draw aisles → plant signposts
+       ·· ··          ┌───────┐  ┌───────┐  ┌───────┐
+      · milk ·        │ dairy │  │ fruit │  │ bread │
+       ·· ··    →     │   <span class="y">⚑</span>   │  │   <span class="y">⚑</span>   │  │   <span class="y">⚑</span>   │   <span class="y">⚑</span> = signpost (centroid)
+                      └───────┘  └───────┘  └───────┘
+
+ <span class="b">QUERY TIME:</span>  compare query to a few SIGNPOSTS (not 5M items!)
+   query ● ─► nearest signpost = dairy ─► open ONLY that aisle
+           ─► (open the N nearest signposts if the dial is higher)</pre>
+    <p><b>Plain English.</b> Group similar vectors into aisles ahead of time, label each with a centre point, and at query time just find the nearest centre(s) and look only there. A few signpost-checks + one small aisle = thousands of comparisons instead of millions.</p>
+    <div class="fact"><span class="lbl">literally true</span><br>This is the <strong>inverted-file (IVF)</strong> approach: cluster the vectors (e.g. with k-means), store one centroid per cluster, and at query time search only the clusters whose centroids are nearest the query. <span class="src">(FAISS IVF index — Johnson, Douze &amp; Jégou, 2017, arXiv:1702.08734.)</span> There's a second, different family — a "friend-of-a-friend" graph called <strong>HNSW</strong> — which we're deliberately leaving for later; one model at a time. <span class="src">(HNSW: Malkov &amp; Yashunin, 2016/2018 — arXiv:1603.09320, IEEE TPAMI.)</span></div>
+    <div class="trap"><span class="lbl">the signpost is only an average</span>A centroid summarises an aisle; it's not a promise. A query on the <em>border</em> between dairy and fruit (a smoothie?) can be sent to the wrong aisle, with the true match one aisle over. That's exactly why "open more than one aisle" rescues recall.</div>
+    <div class="retrieve">
+      <span class="brain">↻ recall</span>
+      <div class="q">At query time, do you compare the query against all 5 million items, or against the handful of signposts first?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans">Against the <b>signposts</b> (a handful) to pick the aisle(s), <em>then</em> only the items inside those aisles. That two-step — cheap signpost check, then small aisle scan — is where the speed comes from.</div>
+    </div>
+  </section>
+
+  <!-- 06 VECTOR DB -->
+  <section class="reveal">
+    <span class="step-tag how">06 · what a vector DB adds</span>
+    <h2>From "clever shelving" to "a running shop"</h2>
+    <p>The aisles-and-signposts search is just an <em>algorithm</em> — you could code it with a maths library. A <strong>vector database</strong> is the product wrapped around it so you can run it for real: the difference between "a shelving method" and "an actual supermarket with staff, a stockroom, and a returns desk."</p>
+    <pre class="ascii"> ┌──────────────────────── VECTOR DATABASE ───────────────────────┐
+ │  the ANN search (aisles + signposts)        <span class="dim">← the part you know</span>  │
+ │  + remembers everything after a restart        <span class="t">(persistence)</span>    │
+ │  + add / change / <span class="r">DELETE</span> items while open    <span class="t">(live updates)</span>   │
+ │  + "search only THIS user's / 2025 / EN docs"  <span class="y">(metadata filter)</span> │
+ │  + keyword + meaning search together           <span class="t">(hybrid search)</span>   │
+ │  + an API, scaling, sharding, access control   <span class="t">(plumbing)</span>        │
+ └─────────────────────────────────────────────────────────────────┘</pre>
+    <p>The quietly crucial one is the <strong>metadata filter</strong>: real apps almost always need "search by meaning, <em>but only within this customer's documents</em>." A bare search algorithm can't do that; a vector DB can.</p>
+    <div class="trap"><span class="lbl">library ≠ database</span>A bare search <em>library</em> (FAISS is the famous one) is <b>only</b> the shelving trick — no persistence, no live add/delete, no filters, no API. Reach for it thinking it's a database and you've signed up to build all the shop's staff yourself. Pinecone, Weaviate, Qdrant, Milvus, Chroma, or Postgres' <span class="mono">pgvector</span> are the actual "running shop." <span class="src">(FAISS is a similarity-search library, not a managed DB — Johnson, Douze &amp; Jégou, 2017. The named DBs are established products; capabilities differ and change — verify current docs.)</span></div>
+    <div class="retrieve">
+      <span class="brain">↻ recall</span>
+      <div class="q">You need "find similar support tickets, but only for this one customer." Can a bare ANN library (FAISS) do that out of the box?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans">Not on its own — that's a <b>metadata filter</b> combined with vector search, which is a <em>vector database</em> feature, not part of the bare ANN algorithm. (And combining filters with ANN cleanly is genuinely hard — "filtered ANN" is solved differently by each DB.)</div>
+    </div>
+  </section>
+
+  <!-- 07 HISTORY + USE CASES (interactive timeline) -->
+  <section class="reveal">
+    <span class="step-tag">07 · the history</span>
+    <h2>Each release unlocked a product</h2>
+    <p>Representing meaning as a vector is <em>old</em>; the "vector database" is <em>new</em> — about 45 years apart. Same core move every time (text → vector → compare by closeness), but each generation pushed "what counts as similar" closer to human meaning and shipped in something real. Tap a milestone.</p>
+    <div class="tlbtns" id="tlbtns"></div>
+    <div class="tldetail" id="tldetail"></div>
+    <div class="note"><b>The chronology twist worth keeping:</b> vector databases <em>predate</em> the ChatGPT/RAG boom. Milvus released in October 2019 and Pinecone launched in 2021 — both <em>before</em> ChatGPT (Nov 2022). The driver for their birth was the first wave (semantic search + recommendations at scale); the LLM boom then poured the crowds in. Cause → effect runs: good embeddings → scale → vector DB → (then) LLM boom → mass adoption. <span class="src">(Milvus initial release Oct 19 2019 — Wikipedia/IBM; Pinecone launched 2021 — Pinecone blog; "by 2026 most serious AI production systems use one" — industry reporting, calibrated.)</span></div>
+  </section>
+
+  <!-- 08 WHO DOES WHAT -->
+  <section class="reveal">
+    <span class="step-tag how">08 · who does what in RAG</span>
+    <h2>The librarian finds; the writer writes</h2>
+    <p>The single most-blurred point: in RAG, the <strong>embedding model + vector DB do the searching</strong> — the LLM finds nothing. By the time the LLM appears, the relevant chunks are already on the desk. The LLM is the <em>writer</em>, not the <em>librarian</em>. Tap to split the jobs:</p>
+    <div class="card">
+      <div class="split" id="split">
+        <div class="tile a">EMBEDDER + VECTOR DB<span class="role">the librarian — finds WHICH pages</span></div>
+        <div class="tile b">LLM<span class="role">the writer — turns pages into an answer</span></div>
+      </div>
+      <button class="btn" id="splitbtn">▶ split the two jobs</button>
+    </div>
+    <pre class="ascii"> question ─► <span class="b">EMBEDDER</span> ─► <span class="b">vector DB / ANN</span> ─► top-k chunks ─► <span class="t">LLM</span> ─► answer
+            <span class="dim">└──────── the SEARCH happens here ───────┘</span>   <span class="dim">└─ the WRITING ─┘</span>
+                       <span class="dim">(no LLM in this part)</span>              <span class="dim">(no search here)</span></pre>
+    <div class="note"><b>The reframe that matters:</b> RAG doesn't <em>add to</em> the LLM's built-in knowledge — that knowledge is stale (frozen at training cutoff), can't see your private data, and may fill gaps with confident-but-unsupported text. RAG makes the model answer from the <em>retrieved chunks instead of its memory</em>. The precision comes from the retrieved context <em>overriding</em> stored memory. <span class="src">(Standard RAG motivation — Lewis et al., 2020, arXiv:2005.11401; generative models' tendency to produce unsupported text — Ji et al., ACM Computing Surveys 2023, arXiv:2202.03629.)</span></div>
+    <div class="retrieve">
+      <span class="brain">↻ recall</span>
+      <div class="q">In a RAG system, which component decides <em>which</em> documents are relevant to the question — the embedding model + vector DB, or the LLM?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans">The <b>embedding model + vector DB</b>. The LLM never picks documents; it only writes from whatever it's handed. Debugging follows from this: bad answer? check whether the <em>librarian</em> fetched the wrong pages (retrieval) or the <em>writer</em> fumbled good pages (the LLM). Different fix for each.</div>
+    </div>
+  </section>
+
+  <!-- 09 TRAPS -->
+  <section class="reveal">
+    <span class="step-tag trap">09 · here be dragons</span>
+    <h2>Where intuition breaks</h2>
+    <div class="trap"><span class="lbl">"approximate" means it can miss</span>ANN trades exactness for speed — it usually, not always, returns the true nearest. The "open more aisles" dial buys recall back at the cost of speed. There is no free lunch.</div>
+    <div class="trap"><span class="lbl">more aisles isn't simply "better"</span>Smaller aisles make each lookup faster but make it easier to miss the right answer (you still open only a few). Faster ≠ better; the sweet spot is in the middle and depends on your data.</div>
+    <div class="trap"><span class="lbl">FAISS is a library, not a database</span>No persistence, live updates, filters, or API. If you need those, you need a vector DB — or you build the shop yourself.</div>
+    <div class="trap"><span class="lbl">filtered search is genuinely hard</span>Mixing "nearest vectors" with "and user_id = 42" fights the index: filter-first can starve the candidate pool; search-first can return k results that all get filtered away. Each DB solves "filtered ANN" differently — don't assume a filter is free.</div>
+    <div class="trap"><span class="lbl">the boom didn't invent the need</span>Vector DBs existed (2019–2021) before RAG took off (2022–23). The LLM wave supercharged adoption of a tool already on the shelf — it didn't create the category.</div>
+  </section>
+
+  <!-- 10 ZOOM OUT -->
+  <section class="reveal">
+    <span class="step-tag">10 · zoom back out</span>
+    <h2>The whole RAG pipeline, with ANN slotted in</h2>
+    <p>Everything closes here. Build the store <span class="write">offline</span> (once); answer questions <span class="find">online</span> (per query). ANN is simply the "retrieve" step.</p>
+    <pre class="ascii"> <span class="t">OFFLINE — build the store once</span>
+   your docs ─► <span class="y">chunk</span> ─► <span class="t">embed</span> each chunk ─► file vectors into <span class="b">AISLES</span>
+              into bits   (embedder)        (cluster + signposts) = vector store
+
+ <span class="b">ONLINE — answer one question (cheap &amp; fast)</span>
+   question ─► <span class="t">embed</span> it ─► <span class="b">ANN</span>: nearest signpost(s) → open those aisles ─► top-k
+             (same embedder)                                              chunks
+                                                                            │
+                                                                            ▼
+                            chunks + question ─► <span class="t">GENERATOR</span> (LLM) ─► grounded answer</pre>
+    <div class="note"><b>One line:</b> cut docs into cards → turn each into meaning-numbers → file into aisles; at question time turn the question into numbers, open the nearest aisle(s), hand those few cards to the writer. <span class="src">(RAG pipeline — Lewis et al., 2020; ANN/aisles step — FAISS IVF, Johnson, Douze &amp; Jégou, 2017.)</span></div>
+  </section>
+
+  <!-- 11 USE CASES -->
+  <section class="reveal">
+    <span class="step-tag">11 · where you'll use it</span>
+    <h2>Real-world calls</h2>
+    <div class="ucgrid">
+      <div class="uc"><h4>RAG over private docs</h4><div class="mono">embed → vector DB → retrieve → LLM</div><p>Grounded answers from your wiki/codebase, with citations.</p></div>
+      <div class="uc"><h4>Semantic search</h4><div class="mono">no LLM required</div><p>"Find similar" — the original 2019-era use case, predates RAG entirely.</p></div>
+      <div class="uc"><h4>Recommendations</h4><div class="mono">item embeddings + ANN</div><p>"Similar listings / songs / products" — Airbnb, Alibaba, Spotify-style.</p></div>
+      <div class="uc"><h4>Image / multimodal search</h4><div class="mono">CLIP-style embeddings</div><p>Search images by meaning; same ANN machinery, different embedder.</p></div>
+      <div class="uc no"><h4>A few thousand vectors</h4><div class="mono">brute force / pgvector exact</div><p>Skip the dedicated DB — exact search is instant at this scale.</p></div>
+      <div class="uc no"><h4>Exact-ID lookups</h4><div class="mono">a normal database</div><p>No "nearest by meaning" needed → you don't need vectors at all.</p></div>
+    </div>
+    <div class="note"><b>The decision:</b> need fast "nearest by meaning" over many vectors, with filters and updates → vector DB. Small/fixed → brute force. Exact keys → an ordinary database.</div>
+  </section>
+
+  <!-- 12 FAQ -->
+  <section class="reveal">
+    <span class="step-tag">12 · faq</span>
+    <h2>Questions you're about to have</h2>
+    <details><summary>Why "approximate"? Why not always find the exact nearest?</summary><div class="body">Exact search means checking every vector (or using structures that collapse in high dimensions — the curse of dimensionality). ANN organises vectors into aisles and checks only a few, trading a small chance of missing the true nearest for an enormous speedup. You tune that trade with how many aisles you open. <span class="src">(Indyk &amp; Motwani, STOC 1998.)</span></div></details>
+    <details><summary>IVF vs HNSW — what's the difference?</summary><div class="body">Two ANN families. IVF ("aisles") clusters vectors and searches the nearest clusters — what this page teaches. HNSW builds a navigable "friend-of-a-friend" graph and hops toward the query; it's very fast and high-recall but memory-hungry and awkward to update. Most vector DBs offer one or both. <span class="src">(IVF: FAISS, Johnson et al. 2017; HNSW: Malkov &amp; Yashunin, arXiv:1603.09320.)</span></div></details>
+    <details><summary>Is a vector database just a search index?</summary><div class="body">No — the index (IVF/HNSW) is the search engine; the database adds persistence, live add/update/delete, metadata filtering, hybrid (keyword+vector) search, an API, and scaling. A bare library like FAISS gives you only the index. <span class="src">(FAISS — Johnson et al. 2017.)</span></div></details>
+    <details><summary>Do I need a vector DB to do RAG?</summary><div class="body">Not always. For a few thousand chunks, brute-force similarity in a maths library or <span class="mono">pgvector</span>'s exact mode is fine. A dedicated vector DB earns its keep at scale (millions of vectors, high query rates, filters, live updates).</div></details>
+    <details><summary>Does RAG need an LLM at all?</summary><div class="body">The retrieval half (embed → vector DB → nearest chunks) is useful on its own — that's semantic search and recommendations, which existed before LLMs. RAG is retrieval <em>plus</em> a generator that writes an answer from the retrieved chunks. Same retrieval engine, one extra step.</div></details>
+  </section>
+
+  <!-- 13 REFERENCES -->
+  <section class="reveal">
+    <span class="step-tag">13 · references</span>
+    <h2>Verify it yourself</h2>
+    <ul class="refs">
+      <li><span class="tag">ANN</span> Indyk &amp; Motwani, "Approximate Nearest Neighbors: Towards Removing the Curse of Dimensionality," STOC 1998.</li>
+      <li><span class="tag">IVF / FAISS</span> Johnson, Douze &amp; Jégou, "Billion-scale similarity search with GPUs," 2017 — arXiv:1702.08734 (FAISS).</li>
+      <li><span class="tag">HNSW</span> Malkov &amp; Yashunin, "Efficient and robust ANN search using Hierarchical Navigable Small World graphs," 2016/2018 — arXiv:1603.09320 (IEEE TPAMI).</li>
+      <li><span class="tag">PQ</span> Jégou, Douze &amp; Schmid, "Product Quantization for Nearest Neighbor Search," IEEE TPAMI 2011.</li>
+      <li><span class="tag">VSM</span> Salton, Wong &amp; Yang, "A Vector Space Model for Automatic Indexing," CACM 18(11):613–620, 1975.</li>
+      <li><span class="tag">LSA</span> Deerwester, Dumais, Furnas, Landauer &amp; Harshman, "Indexing by Latent Semantic Analysis," JASIS 41:391–407, 1990.</li>
+      <li><span class="tag">ESSAY</span> Foltz, Laham &amp; Landauer, "The Intelligent Essay Assessor," 1999; GMAT-essay accuracy ~human (.70 vs .71 inter-rater) reported in Automated Essay Scoring literature (e.g. arXiv:2110.06874).</li>
+      <li><span class="tag">WORD2VEC</span> Mikolov et al., "Efficient Estimation of Word Representations in Vector Space," 2013 — arXiv:1301.3781.</li>
+      <li><span class="tag">AIRBNB</span> Grbovic &amp; Cheng, "Real-time Personalization using Embeddings for Search Ranking at Airbnb," KDD 2018 (+21% CTR on Similar Listings).</li>
+      <li><span class="tag">ITEM2VEC</span> Barkan &amp; Koenigstein, "Item2Vec," 2016 — arXiv:1603.04259; Alibaba billion-scale: Wang et al., KDD 2018.</li>
+      <li><span class="tag">BERT</span> Devlin et al., "BERT," 2018/2019 — arXiv:1810.04805; deployed in Google Search 2019 ("~1 in 10 English queries," reranking) — Google / Search Engine Land.</li>
+      <li><span class="tag">SBERT</span> Reimers &amp; Gurevych, "Sentence-BERT," EMNLP 2019 — arXiv:1908.10084.</li>
+      <li><span class="tag">RAG</span> Lewis et al., "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks," NeurIPS 2020 — arXiv:2005.11401.</li>
+      <li><span class="tag">MILVUS</span> Milvus initial release Oct 19, 2019 (Zilliz; Wikipedia/IBM); architecture paper ACM SIGMOD 2021.</li>
+      <li><span class="tag">PINECONE</span> Pinecone launched 2021, "introducing the vector database" — Pinecone blog; founded 2019 (CB Insights).</li>
+      <li><span class="tag">GEN GAPS</span> Ji et al., "Survey of Hallucination in Natural Language Generation," ACM Computing Surveys 2023 — arXiv:2202.03629.</li>
+    </ul>
+    <div class="note"><b>Honesty note:</b> the supermarket, aisles, signposts, librarian/writer are teaching aids; only the technical claims are sourced. The "tune the aisles" demo runs <em>exact</em> k-means, nearest-neighbour, and probe logic on an illustrative 2-D set of 120 points — real systems use high-dimensional vectors and approximate indexes, but the speed-vs-recall trade-off behaves the same. The brute-vs-ANN scan is a stylised illustration of sequential-vs-targeted checking, not a benchmark. "Most production AI uses a vector DB by 2026" is industry reporting, not a hard figure. Vector-DB product names and capabilities change — verify current docs.</div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <div class="seed">
+    <span class="lbl">↻ diffuse-mode seed — chew on this away from the screen</span>
+    <h3>Every milestone used the same move — turn things into vectors, compare by closeness. What <em>non-text</em> thing in your own work (log lines? API-call sequences? support tickets? commits?) could you turn into a "sentence," embed, and then "find the nearest neighbours" on — and what would that give you for free?</h3>
+    <p style="margin:0">Hint: Airbnb turned click-streams into sentences and got "similar listings." What's your click-stream?</p>
+  </div>
+  <p class="made">made to be impossible to forget — not to be memorised.</p>
+</footer>
+
+<script>
+/* flip-card recall */
+function flip(btn){var a=btn.nextElementSibling;a.classList.toggle('open');btn.textContent=a.classList.contains('open')?'hide answer':'reveal answer';}
+
+/* split reveal */
+var sb=document.getElementById('splitbtn');
+if(sb)sb.addEventListener('click',function(){document.getElementById('split').classList.toggle('go');});
+
+/* ---- brute vs ANN scan animation ---- */
+var NB=40;
+var bd=document.getElementById('bdots'), ad=document.getElementById('adots');
+var bDots=[], aDots=[];
+function buildScan(){
+  if(!bd)return;
+  bd.innerHTML='';ad.innerHTML='';bDots=[];aDots=[];
+  for(var i=0;i<NB;i++){var x=document.createElement('div');x.className='sd';bd.appendChild(x);bDots.push(x);}
+  for(var i=0;i<NB;i++){var y=document.createElement('div');y.className='sd';ad.appendChild(y);aDots.push(y);}
+}
+buildScan();
+var scanTimers=[];
+var sbtn=document.getElementById('scanbtn');
+if(sbtn)sbtn.addEventListener('click',function(){
+  scanTimers.forEach(clearTimeout);scanTimers=[];
+  bDots.forEach(function(d){d.className='sd';});aDots.forEach(function(d){d.className='sd';});
+  document.getElementById('btm').textContent='';document.getElementById('atm').textContent='';
+  var target=27; // the "nearest" item index
+  // brute force: check each, sequentially, then mark hit
+  bDots.forEach(function(d,i){
+    scanTimers.push(setTimeout(function(){
+      d.classList.add('chk');
+      if(i===NB-1){bDots[target].className='sd hit';document.getElementById('btm').textContent='checked all '+NB;}
+    }, 55*i));
+  });
+  // ANN: only the aisle around target (a contiguous block) gets checked, fast
+  var aisleStart=24, aisleEnd=32;
+  aDots.forEach(function(d,i){
+    if(i<aisleStart||i>aisleEnd){d.classList.add('skip');return;}
+    scanTimers.push(setTimeout(function(){
+      d.classList.add('chk');
+      if(i===aisleEnd){aDots[target].className='sd hit';document.getElementById('atm').textContent='checked '+(aisleEnd-aisleStart+1)+' (one aisle)';}
+    }, 90*(i-aisleStart)));
+  });
+});
+
+/* ---- ANN aisle explorer (real k-means + NN on toy data) ---- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+var rnd=mulberry32(42);
+var blobs=[[20,25],[30,70],[55,40],[70,75],[80,25],[45,85],[15,55],[85,55]];
+var PTS=[];blobs.forEach(function(b){for(var i=0;i<15;i++){PTS.push([b[0]+(rnd()-.5)*18,b[1]+(rnd()-.5)*18]);}});
+function d2(a,b){var dx=a[0]-b[0],dy=a[1]-b[1];return dx*dx+dy*dy;}
+function kmeans(pts,K){
+  var cents=[];for(var i=0;i<K;i++)cents.push(pts[Math.floor(i*pts.length/K)].slice());
+  var assign=new Array(pts.length).fill(0);
+  for(var it=0;it<25;it++){
+    for(var p=0;p<pts.length;p++){var bb=0,bdv=Infinity;for(var c=0;c<K;c++){var dd=d2(pts[p],cents[c]);if(dd<bdv){bdv=dd;bb=c;}}assign[p]=bb;}
+    var s=[],n=[];for(var c=0;c<K;c++){s.push([0,0]);n.push(0);}
+    for(var p=0;p<pts.length;p++){var a=assign[p];s[a][0]+=pts[p][0];s[a][1]+=pts[p][1];n[a]++;}
+    for(var c=0;c<K;c++)if(n[c]>0)cents[c]=[s[c][0]/n[c],s[c][1]/n[c]];
+  }
+  return {cents:cents,assign:assign};
+}
+function trueNN(pts,q){var bb=-1,bdv=Infinity;for(var p=0;p<pts.length;p++){var dd=d2(pts[p],q);if(dd<bdv){bdv=dd;bb=p;}}return bb;}
+var CCOL=['#7fb2dd','#6fd8c4','#f0c061','#f08a72','#a78bd0','#7fc77f','#d99a6c','#6cc3d6','#cf7fb0','#9fb86a','#d6b06c','#7f9fd0','#c98f8f','#8fd0b0','#b0a0d0','#d0c080'];
+var annK=4, annNp=1, annQ=[50,55];
+var PAD=22, SZ=320;
+function sx(v){return PAD+(v/100)*(SZ-2*PAD);}
+function sy(v){return SZ-(PAD+(v/100)*(SZ-2*PAD));}
+function renderANN(){
+  var svg=document.getElementById('annsvg');if(!svg)return;
+  var km=kmeans(PTS,annK);
+  var ord=km.cents.map(function(c,i){return {i:i,d:d2(c,annQ)};}).sort(function(a,b){return a.d-b.d;});
+  var probed=ord.slice(0,annNp).map(function(o){return o.i;});
+  var cand=[];for(var p=0;p<PTS.length;p++)if(probed.indexOf(km.assign[p])>=0)cand.push(p);
+  var nn=trueNN(PTS,annQ);
+  var found=cand.indexOf(nn)>=0;
+  var s='';
+  // points
+  for(var p=0;p<PTS.length;p++){
+    var inProbe=probed.indexOf(km.assign[p])>=0;
+    var col=CCOL[km.assign[p]%CCOL.length];
+    var r=inProbe?3.4:2.6, op=inProbe?1:0.28;
+    s+='<circle cx="'+sx(PTS[p][0]).toFixed(1)+'" cy="'+sy(PTS[p][1]).toFixed(1)+'" r="'+r+'" fill="'+col+'" opacity="'+op+'"/>';
+  }
+  // true NN ring
+  s+='<circle cx="'+sx(PTS[nn][0]).toFixed(1)+'" cy="'+sy(PTS[nn][1]).toFixed(1)+'" r="6.5" fill="none" stroke="'+(found?'#6fd8c4':'#f08a72')+'" stroke-width="2.5"/>';
+  // centroids (signposts)
+  km.cents.forEach(function(c,i){
+    var on=probed.indexOf(i)>=0;
+    s+='<rect x="'+(sx(c[0])-3.5).toFixed(1)+'" y="'+(sy(c[1])-3.5).toFixed(1)+'" width="7" height="7" transform="rotate(45 '+sx(c[0]).toFixed(1)+' '+sy(c[1]).toFixed(1)+')" fill="'+(on?'#e0a32e':'#5b5246')+'" stroke="#262019" stroke-width="1"/>';
+  });
+  // query
+  s+='<circle cx="'+sx(annQ[0]).toFixed(1)+'" cy="'+sy(annQ[1]).toFixed(1)+'" r="6" fill="#d8503a" stroke="#fff" stroke-width="2"/>';
+  s+='<text x="'+(sx(annQ[0])+9).toFixed(1)+'" y="'+(sy(annQ[1])+4).toFixed(1)+'" font-family="JetBrains Mono" font-size="11" fill="#d8503a" font-weight="700">query</text>';
+  svg.innerHTML=s;
+  var comparisons=annK+cand.length;
+  document.getElementById('acomp').textContent=comparisons;
+  document.getElementById('aspeed').textContent='×'+(120/comparisons).toFixed(1);
+  var v=document.getElementById('averdict');
+  if(found){v.className='verdict hit';v.textContent='✓ found the true nearest';}
+  else{v.className='verdict miss';v.textContent='✗ missed it — nearest is in an aisle you didn\u2019t open';}
+}
+document.querySelectorAll('.pbtn[data-k]').forEach(function(b){
+  b.addEventListener('click',function(){
+    annK=parseInt(b.getAttribute('data-k'));
+    document.querySelectorAll('.pbtn[data-k]').forEach(function(x){x.classList.toggle('active',x===b);});
+    var sl=document.getElementById('npslider');sl.max=annK;if(annNp>annK){annNp=annK;sl.value=annK;document.getElementById('npval').textContent=annK;}
+    renderANN();
+  });
+});
+var npsl=document.getElementById('npslider');
+if(npsl)npsl.addEventListener('input',function(){annNp=parseInt(npsl.value);document.getElementById('npval').textContent=annNp;renderANN();});
+var annsvg=document.getElementById('annsvg');
+if(annsvg)annsvg.addEventListener('click',function(e){
+  var r=annsvg.getBoundingClientRect();
+  var px=(e.clientX-r.left)/r.width*SZ, py=(e.clientY-r.top)/r.height*SZ;
+  var vx=(px-PAD)/(SZ-2*PAD)*100, vy=(1-(py-PAD)/(SZ-2*PAD))*100;
+  annQ=[Math.max(2,Math.min(98,vx)),Math.max(2,Math.min(98,vy))];
+  renderANN();
+});
+// init default K=4 active
+(function(){var b4=document.querySelector('.pbtn[data-k="4"]');if(b4)b4.classList.add('active');renderANN();})();
+
+/* ---- history timeline ---- */
+var MILES=[
+  {y:'1975',nm:'Vector Space Model',solved:'Find the relevant <b>documents</b> among thousands, by ranking instead of exact match — docs and queries as term vectors.',wild:'Document/library retrieval and the foundation of keyword search engines (tf-idf).',cite:'Salton, Wong &amp; Yang, CACM 18(11):613–620, 1975. First used in the SMART system.'},
+  {y:'1990',nm:'Latent Semantic Analysis',solved:'Match texts by <b>meaning</b> even with no shared words (the synonym problem) — using the first <em>dense</em> vectors.',wild:'Meaning-aware retrieval, and automated essay scoring: the Intelligent Essay Assessor scored GMAT essays at ~human level (.70 vs .71 inter-rater).',cite:'Deerwester et al., JASIS 41:391–407, 1990; Foltz, Laham &amp; Landauer, IEA, 1999.'},
+  {y:'2013',nm:'word2vec',solved:'Cheap, <b>learned</b> dense vectors — and the insight that you can embed anything sequential, not just words.',wild:'Recommendations at scale: Airbnb listing embeddings (+21% CTR on Similar Listings), Alibaba billion-scale e-commerce, Spotify, item2vec.',cite:'Mikolov et al., 2013 (arXiv:1301.3781); Grbovic &amp; Cheng, KDD 2018; Barkan &amp; Koenigstein, 2016.'},
+  {y:'2018–19',nm:'BERT / Sentence-BERT',solved:'<b>Context</b>: one vector per word became context-aware, so word order and small words ("to", "from") finally matter.',wild:'Google Search ranking (2019, ~1 in 10 English queries, reranking for intent); Sentence-BERT enabled scalable semantic search &amp; clustering.',cite:'Devlin et al., 2018/2019 (arXiv:1810.04805); Reimers &amp; Gurevych, EMNLP 2019; Google / Search Engine Land.'},
+  {y:'2019–21',nm:'Vector databases',solved:'Store <b>billions</b> of embeddings and search them fast, with filters and live updates — ANN as reusable infrastructure.',wild:'Milvus (Oct 2019) and Pinecone (2021) ship — built for the first wave: semantic search and recommendations at scale.',cite:'Milvus initial release Oct 19 2019 (Wikipedia/IBM); Pinecone launched 2021 (Pinecone blog).'},
+  {y:'2022+',nm:'RAG boom',solved:'Ground LLMs on <b>private, current</b> data so answers cite sources instead of leaning on frozen memory.',wild:'RAG chatbots/assistants over private corpora; vector-DB adoption explodes after ChatGPT (Nov 2022).',cite:'Lewis et al., NeurIPS 2020 (arXiv:2005.11401); industry reporting 2025–26 (calibrated).'}
+];
+var tlb=document.getElementById('tlbtns'), tld=document.getElementById('tldetail');
+function showMile(idx){
+  document.querySelectorAll('#tlbtns .tlbtn').forEach(function(b,i){b.classList.toggle('active',i===idx);});
+  var m=MILES[idx];
+  tld.innerHTML='<div class="yr">'+m.y+'</div><div class="nm">'+m.nm+'</div>'
+    +'<p class="solved"><b>Solved:</b> '+m.solved+'</p>'
+    +'<p class="wild"><b>In the wild:</b> '+m.wild+'</p>'
+    +'<p class="cite">'+m.cite+'</p>';
+  tld.classList.remove('tlfade');void tld.offsetWidth;tld.classList.add('tlfade');
+}
+if(tlb){
+  MILES.forEach(function(m,i){
+    var b=document.createElement('button');b.className='tlbtn';b.textContent=m.y;
+    b.addEventListener('click',function(){showMile(i);});
+    tlb.appendChild(b);
+  });
+  showMile(0);
+}
+
+/* scroll reveal */
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{threshold:.12});
+document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});
+</script>
+</body>
+</html>
