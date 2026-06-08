@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG — explained the way it should be</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;800&family=Caveat:wght@500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f3ead9; --paper-2:#ece0c9;
+    --ink:#2a2420; --ink-soft:#5b5246;
+    --blue:#2c5d86; --teal:#2c8f7f; --coral:#d8503a; --mustard:#e0a32e;
+    --line:rgba(42,36,32,.14); --card:#fbf5e9; --shadow:6px 7px 0 rgba(42,36,32,.13);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Hanken Grotesk',sans-serif;font-size:18px;line-height:1.65;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:26px 26px;overflow-x:hidden;}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.4;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.045'/%3E%3C/svg%3E");
+    mix-blend-mode:multiply;}
+  .wrap{max-width:860px;margin:0 auto;padding:0 22px;position:relative;z-index:2}
+
+  h1,h2,h3{font-family:'Fraunces',serif;line-height:1.05;font-weight:900;letter-spacing:-.01em}
+  h2{font-size:clamp(28px,5vw,44px);margin:0 0 6px}
+  h3{font-size:clamp(21px,3.6vw,28px);font-weight:600;margin:0 0 10px}
+  p{margin:0 0 16px}
+  a{color:var(--blue)}
+  .mono{font-family:'JetBrains Mono',monospace}
+  .hand{font-family:'Caveat',cursive;font-size:1.42em;line-height:1.15;color:var(--coral)}
+  strong{font-weight:800}
+  .retr{color:var(--blue);font-weight:800}
+  .gen{color:var(--teal);font-weight:800}
+  .src{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-soft)}
+
+  header{padding:64px 0 30px;text-align:center}
+  .kicker{font-family:'Caveat',cursive;font-size:30px;color:var(--coral);transform:rotate(-3deg);display:inline-block;margin-bottom:6px}
+  header h1{font-size:clamp(40px,9vw,78px);font-weight:900;margin:0}
+  header h1 em{font-style:italic;color:var(--blue)}
+  .sub{font-size:clamp(17px,2.4vw,21px);color:var(--ink-soft);max-width:620px;margin:18px auto 0}
+  .scrollcue{margin-top:38px;font-family:'Caveat',cursive;font-size:24px;color:var(--ink-soft);animation:bob 1.8s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}
+
+  section{padding:46px 0;border-top:2px dashed var(--line)}
+  .step-tag{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#fff;background:var(--ink);padding:5px 11px;border-radius:3px;margin-bottom:14px;transform:rotate(-1deg)}
+  .step-tag.why{background:var(--coral)} .step-tag.how{background:var(--blue)} .step-tag.trap{background:var(--coral)}
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  .card{background:var(--card);border:2px solid var(--ink);border-radius:10px;box-shadow:var(--shadow);padding:22px 24px;margin:22px 0}
+  .note{border-left:6px solid var(--mustard);background:#fbf3df;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0;font-size:16.5px}
+  .note b{color:#9a6f12}
+  .trap{border:2px solid var(--coral);background:#fdeee9;border-radius:10px;padding:18px 22px;margin:22px 0;box-shadow:4px 5px 0 rgba(216,80,58,.22)}
+  .trap .lbl{font-family:'Caveat',cursive;font-size:26px;color:var(--coral);display:block;margin-bottom:2px}
+  .fact{border:2px dotted var(--teal);background:#eef7f4;border-radius:10px;padding:16px 20px;margin:20px 0;font-size:16px}
+  .fact .lbl{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--teal);font-weight:700}
+
+  table.cmp{width:100%;border-collapse:collapse;margin:22px 0;font-size:15.5px;background:var(--card);border:2px solid var(--ink);border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
+  table.cmp th,table.cmp td{padding:11px 13px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  table.cmp th{background:var(--ink);color:#fff;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+  table.cmp tr:last-child td{border-bottom:none}
+  table.cmp td:first-child{font-weight:800}
+  .win{color:var(--teal);font-weight:700} .lose{color:var(--coral);font-weight:700}
+
+  pre.ascii{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.5;background:#262019;color:#f3ead9;border-radius:10px;padding:18px 16px;overflow-x:auto;box-shadow:var(--shadow);margin:20px 0}
+  pre.ascii .b{color:#7fb2dd} pre.ascii .t{color:#6fd8c4} pre.ascii .y{color:#f0c061} pre.ascii .r{color:#f08a72} pre.ascii .dim{color:#8a7f6e}
+
+  /* split reveal */
+  .split{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:stretch;margin:14px 0 6px}
+  .tile{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(16px,4vw,24px);padding:14px 18px;border:2px solid var(--ink);border-radius:8px;background:#fff;position:relative;transition:transform .5s ease,background .5s ease,color .5s ease}
+  .tile .role{position:absolute;left:0;right:0;bottom:-28px;font-family:'Caveat',cursive;font-size:18px;text-align:center;opacity:0;transition:opacity .5s ease .3s;color:var(--ink)}
+  .split.go .tile.a{background:var(--blue);color:#fff;transform:translateY(-6px)}
+  .split.go .tile.b{background:var(--teal);color:#fff;transform:translateY(10px)}
+  .split.go .tile .role{opacity:1}
+  .btn{display:block;margin:30px auto 0;font-family:'Hanken Grotesk';font-weight:800;font-size:16px;background:var(--mustard);color:var(--ink);border:2px solid var(--ink);border-radius:30px;padding:11px 26px;cursor:pointer;box-shadow:3px 4px 0 var(--ink);transition:transform .1s}
+  .btn:active{transform:translate(3px,4px);box-shadow:none}
+
+  /* cosine playground */
+  .cos{background:var(--card);border:2px solid var(--ink);border-radius:14px;box-shadow:var(--shadow);padding:22px}
+  .cos svg{width:100%;max-width:420px;display:block;margin:0 auto;height:auto}
+  .slider{width:100%;margin:14px 0 4px;accent-color:var(--coral)}
+  .rankrow{display:flex;align-items:center;gap:10px;background:var(--paper-2);border-radius:8px;padding:9px 13px;margin:8px 0;border:2px solid transparent;transition:all .3s}
+  .rankrow.top{border-color:var(--teal);background:#eef7f4}
+  .rankrow .chip{width:14px;height:14px;border-radius:50%;border:2px solid var(--ink);flex:0 0 auto}
+  .rankrow .nm{font-family:'JetBrains Mono',monospace;font-size:14px;flex:1}
+  .rankrow .cv{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px}
+  .rankrow .vd{font-family:'Caveat',cursive;font-size:18px;color:var(--ink-soft);flex:0 0 auto}
+
+  /* parameter explorer */
+  .explorer{background:var(--card);border:2px solid var(--ink);border-radius:14px;box-shadow:var(--shadow);padding:24px;margin:24px 0}
+  .ctrlrow{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:8px}
+  .pbtn{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;border:2px solid var(--ink);background:#fff;color:var(--ink);border-radius:8px;padding:8px 12px;cursor:pointer;transition:all .15s}
+  .pbtn.active{background:var(--blue);color:#fff;transform:translateY(-2px);box-shadow:0 4px 0 rgba(44,93,134,.4)}
+  .statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}
+  .stat{text-align:center;background:var(--paper-2);border-radius:8px;padding:10px 4px}
+  .stat .n{font-family:'Fraunces';font-weight:900;font-size:clamp(17px,4vw,26px);line-height:1;color:var(--blue)}
+  .stat .l{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;margin-top:4px}
+  @media(max-width:560px){.statgrid{grid-template-columns:repeat(2,1fr)}}
+  .strip{display:flex;width:100%;height:54px;border:2px solid var(--ink);border-radius:8px;overflow:hidden;margin-top:6px}
+  .seg{flex:1;border-right:2px solid var(--ink);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#fff;font-weight:700;transition:flex .5s ease,background .4s ease}
+  .seg:last-child{border-right:none}
+  .striplabel{font-family:'Caveat',cursive;font-size:20px;color:var(--ink-soft);text-align:center;margin-top:8px}
+
+  /* flip-card recall */
+  .retrieve{background:#262019;color:var(--paper);border-radius:12px;padding:20px 24px;margin:24px 0;box-shadow:var(--shadow)}
+  .retrieve .brain{font-family:'Caveat',cursive;color:var(--mustard);font-size:22px}
+  .retrieve .q{font-family:'Fraunces';font-weight:600;font-size:20px;margin-bottom:4px}
+  .retrieve .ans{max-height:0;overflow:hidden;transition:max-height .5s ease;color:#d8cdb8;font-size:16px}
+  .retrieve .ans.open{max-height:700px;margin-top:12px}
+  .revealbtn{margin-top:12px;font-family:'Hanken Grotesk';font-weight:700;font-size:14px;background:var(--mustard);color:var(--ink);border:none;border-radius:20px;padding:8px 18px;cursor:pointer}
+
+  /* ANIM 1: the grinder pipeline */
+  .pipe{display:flex;align-items:center;justify-content:center;gap:6px;margin:22px 0 6px;flex-wrap:nowrap}
+  .feed,.outz{position:relative;width:120px;height:96px;overflow:hidden;flex:0 0 auto}
+  @media(max-width:560px){.feed,.outz{width:84px}}
+  .grinder{flex:0 0 auto;width:150px;min-height:96px;border:3px solid var(--ink);border-radius:12px;background:var(--blue);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-shadow:var(--shadow);padding:8px;position:relative}
+  .grinder .gt{font-family:'Fraunces';font-weight:600;font-size:15px;line-height:1.1}
+  .grinder .gw{font-family:'JetBrains Mono';font-size:10px;color:#bcd6ea;margin-top:4px;letter-spacing:.04em}
+  .grinder::before{content:"⚙";position:absolute;font-size:42px;opacity:.13;animation:spin 4s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .token{position:absolute;font-family:'JetBrains Mono';font-size:13px;font-weight:700;background:var(--mustard);color:var(--ink);border:2px solid var(--ink);border-radius:6px;padding:2px 6px;top:38px;white-space:nowrap;animation:feedin 3.6s linear infinite}
+  @keyframes feedin{0%{left:-50px;opacity:0}12%{opacity:1}72%{opacity:1;left:96px}100%{left:120px;opacity:0}}
+  .num{position:absolute;font-family:'JetBrains Mono';font-size:13px;font-weight:700;color:var(--teal);top:38px;animation:outflow 3.6s linear infinite}
+  @keyframes outflow{0%{left:-6px;opacity:0}10%{opacity:0}30%{opacity:1}80%{opacity:1}100%{left:120px;opacity:0}}
+
+  /* ANIM 2: untrained vs trained scatter */
+  .scatterbox{position:relative;height:300px;background:#262019;border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin:18px 0 6px}
+  .dot{position:absolute;width:13px;height:13px;border-radius:50%;border:2px solid #fff;transform:translate(-50%,-50%);transition:left 1s cubic-bezier(.5,0,.2,1),top 1s cubic-bezier(.5,0,.2,1);box-shadow:0 0 0 2px rgba(0,0,0,.25)}
+  .dot .dl{position:absolute;left:16px;top:-3px;font-family:'JetBrains Mono';font-size:11px;color:#f3ead9;white-space:nowrap}
+  .clusterlbl{position:absolute;font-family:'Caveat',cursive;font-size:20px;color:#8a7f6e;opacity:0;transition:opacity .8s ease .6s}
+  .scatterbox.trained .clusterlbl{opacity:1}
+
+  /* ANIM 3: cpu vs gpu race */
+  .race{background:var(--card);border:2px solid var(--ink);border-radius:14px;box-shadow:var(--shadow);padding:20px}
+  .lane{margin:12px 0}
+  .lane h4{font-family:'Fraunces';font-weight:600;font-size:16px;margin:0 0 6px;display:flex;justify-content:space-between;align-items:baseline}
+  .lane h4 .tm{font-family:'JetBrains Mono';font-size:13px;color:var(--coral)}
+  .cells{display:flex;gap:5px;flex-wrap:wrap}
+  .cell{width:30px;height:30px;border-radius:6px;border:2px solid var(--ink);background:#e7ddc8;transition:background .15s,transform .15s}
+  .cell.done{background:var(--teal);transform:translateY(-2px)}
+  .cell.cpu.done{background:var(--blue)}
+  @media(max-width:560px){.cell{width:24px;height:24px}}
+
+  /* use cases */
+  .ucgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+  @media(max-width:600px){.ucgrid{grid-template-columns:1fr}}
+  .uc{background:var(--card);border:2px solid var(--ink);border-radius:10px;padding:16px 18px;box-shadow:4px 5px 0 rgba(42,36,32,.12)}
+  .uc h4{font-family:'Fraunces';font-weight:600;font-size:18px;margin:0 0 6px}
+  .uc .mono{font-size:13px;color:var(--blue);font-weight:700}
+  .uc p{font-size:15px;margin:6px 0 0;color:var(--ink-soft)}
+  .uc.no{box-shadow:4px 5px 0 rgba(216,80,58,.18)} .uc.no .mono{color:var(--coral)}
+
+  /* faq */
+  details{background:var(--card);border:2px solid var(--ink);border-radius:10px;margin:12px 0;overflow:hidden;box-shadow:3px 4px 0 rgba(42,36,32,.1)}
+  summary{cursor:pointer;padding:16px 20px;font-weight:800;font-size:17px;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"+";font-family:'JetBrains Mono';font-size:24px;color:var(--coral);transition:transform .2s}
+  details[open] summary::after{transform:rotate(45deg)}
+  details .body{padding:0 20px 18px;font-size:16px;color:var(--ink-soft)}
+
+  .refs{font-size:14.5px;line-height:1.7;padding-left:0;list-style:none} .refs li{margin-bottom:9px}
+  .refs .tag{font-family:'JetBrains Mono';font-size:11px;background:var(--ink);color:#fff;padding:2px 7px;border-radius:4px;margin-right:6px}
+
+  footer{text-align:center;padding:50px 0 70px;border-top:2px dashed var(--line)}
+  .seed{background:var(--blue);color:#fff;border-radius:14px;padding:26px;box-shadow:var(--shadow);text-align:left}
+  .seed .lbl{font-family:'Caveat',cursive;font-size:26px;color:var(--mustard)}
+  .seed h3{color:#fff;margin:4px 0 10px}
+  .made{font-family:'Caveat',cursive;font-size:20px;color:var(--ink-soft);margin-top:30px}
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <span class="kicker">give the model an open book ✎</span>
+  <h1>RAG, <em>without</em> the hand-waving</h1>
+  <p class="sub">Retrieval-Augmented Generation, ground up: why it exists, what an embedding model really <em>is</em>, how to choose one, and whether you need a GPU. One analogy, all the way down — every claim sourced.</p>
+  <div class="scrollcue">scroll down ↓</div>
+</header>
+
+<main class="wrap">
+
+  <!-- 01 BIG PICTURE -->
+  <section class="reveal">
+    <span class="step-tag">01 · the big picture</span>
+    <h2>Two letters doing all the work</h2>
+    <p>RAG = <strong>Retrieval-Augmented Generation</strong>. In one breath: <em>before</em> the model answers, you fetch the most relevant documents from a knowledge source and paste them into the prompt — so it answers from <span class="retr">those facts</span>, not from whatever it half-remembers. It bolts a <strong>search step</strong> in front of a language model. Tap to split it.</p>
+    <div class="card">
+      <div class="split" id="split">
+        <div class="tile a">RETRIEVE<span class="role">find the right docs first</span></div>
+        <div class="tile b">GENERATE<span class="role">answer using them</span></div>
+      </div>
+      <button class="btn" id="splitbtn">▶ split RAG into its two halves</button>
+    </div>
+    <pre class="ascii">        <span class="dim">WITHOUT RAG</span>                           <span class="dim">WITH RAG</span>
+   ┌──────────────────┐               ┌──────────────────┐
+   │  your question   │               │  your question   │
+   └────────┬─────────┘               └────────┬─────────┘
+            │                          ┌────────▼─────────┐
+            ▼                          │ <span class="b">1. RETRIEVE</span>       │ ← fetch relevant docs
+   ┌──────────────────┐                │   relevant text  │
+   │ LLM answers from │                └────────┬─────────┘
+   │ memory (weights) │                         │ docs + question
+   └────────┬─────────┘                ┌────────▼─────────┐
+            │                          │ <span class="t">2. GENERATE</span>       │ ← answer using them
+            ▼                          │   the answer     │
+        answer                         └────────┬─────────┘
+   <span class="dim">(from memory only)</span>                          ▼
+                                            <span class="t">answer</span>
+                                       <span class="dim">(grounded in docs)</span></pre>
+    <div class="fact"><span class="lbl">literally true</span><br>The term and original architecture — a neural retriever feeding a sequence-to-sequence generator — come from Lewis et al., <em>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</em>, NeurIPS 2020. <span class="src">(arXiv:2005.11401)</span></div>
+  </section>
+
+  <!-- 02 WHY THIS EXISTS -->
+  <section class="reveal">
+    <span class="step-tag why">02 · why this exists</span>
+    <h2>Feel the gap first</h2>
+    <p>A plain language model is a sharp student who crammed, then sat a <em>closed-book</em> exam. Three gaps open up:</p>
+    <div class="note"><b>1 · Knowledge cutoff.</b> It only "studied" up to a training date — anything newer, it can't know.<br><br><b>2 · No access to your private/changing data.</b> It never read your wiki, your internal docs, your codebase.<br><br><b>3 · It can fill gaps with plausible-but-unsupported answers.</b> When it lacks the facts, a model can still produce fluent, confident text that isn't grounded in any source — a well-documented failure mode of generative models. <span class="src">(Ji et al., <em>Survey of Hallucination in Natural Language Generation</em>, ACM Computing Surveys, 2023 — arXiv:2202.03629)</span></div>
+    <p>But RAG isn't the only fix. The honest framing: the <span class="gen">"augment"</span> half is just "the model answers using context you supplied." The whole game is <strong>who decides what's relevant — a human up front, or a machine at query time.</strong></p>
+    <table class="cmp">
+      <tr><th>Approach</th><th>What it does</th><th>Wins at</th><th>Loses at</th></tr>
+      <tr><td>Just ask the LLM</td><td>Answer from trained weights (closed book)</td><td class="win">cheap, fast, general knowledge</td><td class="lose">cutoff, no private data, ungrounded gaps</td></tr>
+      <tr><td>Fine-tuning</td><td>Retrain the model on your data, into the weights</td><td class="win">teaching behaviour / style / format</td><td class="lose">costly, slow to update, hard to cite a source</td></tr>
+      <tr><td>Stuff it all in context</td><td>Paste every doc into the prompt every time</td><td class="win">tiny doc sets, one-off tasks</td><td class="lose">cost per token, finite window, mid-context drop-off</td></tr>
+      <tr><td>RAG</td><td>Fetch only the <em>relevant</em> bits at query time</td><td class="win">large / changing / private facts, citable answers</td><td class="lose">quality capped by retrieval; more moving parts</td></tr>
+    </table>
+    <p class="hand" style="text-align:center">Fine-tuning changes <em>how</em> the model behaves. RAG changes <em>what facts are on the desk.</em></p>
+    <div class="fact"><span class="lbl">on the "stuff it all in" failure</span><br>Even with a large context window, models can use information in the middle of a long input less reliably than at the ends — the "lost in the middle" effect — so "just paste everything" degrades as the corpus grows. <span class="src">(Liu et al., <em>Lost in the Middle</em>, 2023 — arXiv:2307.03172)</span></div>
+    <div class="retrieve">
+      <span class="brain">↻ quick recall</span>
+      <div class="q">Your wiki gains a new policy page daily and you want answers from the latest ones. Fine-tuning or RAG — why?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans"><b>RAG.</b> The knowledge changes daily; retraining per change is absurdly slow and costly. With RAG you just update the documents and the next query picks them up — and you can cite which page. Fine-tuning is for changing <em>behaviour</em>, not chasing fast-moving facts.</div>
+    </div>
+    <div class="note"><b>When NOT to use RAG:</b> the corpus is small enough to just paste; the facts are stable and already in the model; or you need a new <em>skill/style</em>, not fact recall. RAG is the machinery for <em>deciding what to add</em> when you can't do it by hand. No hand-deciding needed → no RAG needed.</div>
+  </section>
+
+  <!-- 03 ANCHOR -->
+  <section class="reveal">
+    <span class="step-tag how">03 · the anchor</span>
+    <h2>One analogy, all the way down</h2>
+    <p>Picture a sharp <strong>student taking an exam</strong>. <strong>No RAG</strong> = closed-book → answers from memory. <strong>RAG</strong> = open-book: an assistant sprints to the library, grabs the few <span class="retr">relevant pages</span>, drops them on the desk; the student reads those, <em>then</em> writes.</p>
+    <p class="hand" style="text-align:center">Everything else — the model, embeddings, BM25, cosine, dimensions, GPUs —<br>is just "how does the assistant find the right pages fast, in a library of millions?"</p>
+    <p style="text-align:center;color:var(--ink-soft)">We never switch metaphors. Hold onto the desk.</p>
+  </section>
+
+  <!-- 04 EMBEDDINGS -->
+  <section class="reveal">
+    <span class="step-tag how">04 · embeddings</span>
+    <h2>Turning meaning into numbers</h2>
+    <p><b>Analogy beat.</b> A keyword index files pages by <em>exact word</em>. But "I forgot my login" and "reset your password" share <em>zero words</em> — a word-matching librarian misses the perfect page. So we build an index that files pages by <em>what they're about.</em></p>
+    <pre class="ascii">     <span class="dim">a "meaning map" — really hundreds of dimensions, drawn as 2-D</span>
+
+              cat <span class="t">●</span>
+              <span class="t">●</span> kitten
+       <span class="t">●</span> puppy
+     dog <span class="t">●</span>                       "reset password" <span class="b">●</span>
+                                  "forgot my login" <span class="b">●</span>  ← land near
+                                                          each other
+       <span class="y">●</span> banana                   <span class="b">●</span> account recovery
+      fruit <span class="y">●</span>
+              <span class="dim">── close = similar meaning · far = different ──</span></pre>
+    <p><b>Plain English.</b> An <strong>embedding</strong> is a list of numbers (a vector) standing for the <em>meaning</em> of some text. Similar meaning → numerically close vectors. To search, embed the question, drop it on the map, grab the nearest pages.</p>
+    <div class="fact"><span class="lbl">literally true</span><br>The idea that <em>geometry in vector space encodes meaning</em> — and is <em>learned from data</em>, not hand-set — traces to word vectors like word2vec, where directions captured relationships (famously, king − man + woman ≈ queen). <span class="src">(Mikolov et al., <em>Efficient Estimation of Word Representations in Vector Space</em>, 2013 — arXiv:1301.3781.)</span></div>
+    <div class="retrieve">
+      <span class="brain">↻ predict</span>
+      <div class="q">If embeddings place "earth is flat" and "earth is round" close together (same topic), what does retrieval actually find?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans">Text that's <b>on-topic, not text that's correct.</b> Embeddings encode similarity of subject, with no notion of truth. Two contradictory claims about the same thing sit close. Keep this in your pocket.</div>
+    </div>
+  </section>
+
+  <!-- 05 WHAT THE MODEL IS  (NEW) -->
+  <section class="reveal">
+    <span class="step-tag how">05 · what the model <em>is</em></span>
+    <h2>The grinder, not the grounds</h2>
+    <p><b>The keystone question:</b> if the output is "just an N-number array," why can't any program make it — why a whole <em>model</em>? Here it is in one line:</p>
+    <p class="hand" style="text-align:center">Producing N numbers is trivial.<br>Producing N numbers where <em>distance = closeness in meaning</em> is the hard part — and that mapping can't be hand-written, it must be <em>learned</em>.</p>
+    <p>An embedding model is a <strong>frozen function</strong>: text in → vector out. Inside sit millions of <em>learned weights</em> — tuned once during training, then fixed. Those weights <strong>are</strong> the model. It does <em>not</em> store your documents; it holds the trained recipe for placing <em>any</em> text into meaning-space.</p>
+
+    <!-- ANIM 1 -->
+    <div class="card">
+      <div class="pipe">
+        <div class="feed">
+          <span class="token" style="animation-delay:0s">forgot</span>
+          <span class="token" style="animation-delay:1.2s">my</span>
+          <span class="token" style="animation-delay:2.4s">login</span>
+        </div>
+        <div class="grinder"><span class="gt">embedding model</span><span class="gw">frozen weights · the "judgment"</span></div>
+        <div class="outz">
+          <span class="num" style="animation-delay:.6s">0.11</span>
+          <span class="num" style="animation-delay:1.8s">-0.02</span>
+          <span class="num" style="animation-delay:3.0s">0.85…</span>
+        </div>
+      </div>
+      <p style="text-align:center;font-family:'Caveat',cursive;font-size:20px;color:var(--ink-soft);margin:6px 0 0">the grinder (machine) keeps running · the grounds (vectors) appear only when you feed it text</p>
+    </div>
+    <p><b>Why a simple program can't.</b> Sit down to write <span class="mono">text_to_vector()</span> by hand and you hit a wall fast:</p>
+    <pre class="ascii">  Attempt 1 — HASH the text:
+     "password"  → <span class="r">[random numbers]</span>
+     "passwordd" → <span class="r">[totally different]</span>   one typo ⇒ far away
+     "login"     → <span class="r">[unrelated]</span>          synonym ⇒ far away
+  ✗ geometry carries ZERO meaning.
+
+  Attempt 2 — COUNT words (bag of words):
+     "reset password" → reset=1, password=1
+     "forgot login"   → forgot=1, login=1
+  ✗ no shared words ⇒ vectors point apart  (this IS the BM25 problem)</pre>
+    <p>Meaning is bottomless — <span class="mono">"bank"</span> (river vs money), <span class="mono">"not good"</span> (negation flips it). No human writes rules for all of it. So instead of <em>writing</em> the mapping, we <strong>learn</strong> it: show a neural network billions of examples with a <em>contrastive</em> goal — pairs that should match come out close, unrelated pairs come out far — and nudge the weights until it generalises. Tap to watch random numbers become a learned map:</p>
+
+    <!-- ANIM 2 -->
+    <div class="scatterbox" id="scatter">
+      <span class="clusterlbl" id="cl1" style="left:20%;top:16%">animals</span>
+      <span class="clusterlbl" id="cl2" style="left:64%;top:34%">account / login</span>
+      <span class="clusterlbl" id="cl3" style="left:30%;top:78%">food</span>
+    </div>
+    <button class="btn" id="trainbtn">▶ train the model</button>
+
+    <div class="fact"><span class="lbl">literally true</span><br>Modern text embedders are neural networks (typically transformer encoders) trained so similar text maps to nearby vectors. Anthropic's own docs describe embedding models as neural networks that capture and compress semantic context. The "similar-close / different-far" contrastive recipe is standard. <span class="src">(Reimers &amp; Gurevych, <em>Sentence-BERT</em>, EMNLP 2019 — arXiv:1908.10084; Karpukhin et al., <em>Dense Passage Retrieval</em>, EMNLP 2020 — arXiv:2004.04906; transformer architecture: Vaswani et al., 2017 — arXiv:1706.03762; Anthropic Embeddings docs, docs.claude.com.)</span></div>
+    <div class="note"><b>So what does "N dimensions" hold?</b> N is just how many coordinates the model outputs to pin a position. Each number is an abstract learned "feature axis" — and usually it has <em>no human name</em>; the model discovered these directions itself in training. The vector doesn't hold the text or its words — it holds <em>where this text sits</em> relative to all other text.</div>
+    <div class="retrieve">
+      <span class="brain">↻ recall</span>
+      <div class="q">A Python one-liner turns any text into 768 random-but-consistent numbers (same text always → same array). Is that an embedding model? Why / why not?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans"><b>No.</b> It's consistent but meaningless: similar texts land nowhere near each other. An embedding model is valuable because its <em>learned weights</em> make "close in numbers" mean "close in meaning." The arithmetic of emitting numbers is trivial; <em>knowing which numbers to emit</em> is the learned, can't-fake-it part.</div>
+    </div>
+  </section>
+
+  <!-- 06 BM25 -->
+  <section class="reveal">
+    <span class="step-tag how">06 · keyword search (BM25)</span>
+    <h2>The old librarian, and why you keep them</h2>
+    <p><b>Analogy beat.</b> Before the meaning-map librarian came the <em>word-counting</em> one: <strong>BM25</strong>. It ranks a page by how well its words match the query's, with three instincts:</p>
+    <pre class="ascii">  BM25 score = sum over each query word of:
+    <span class="b">(1) term frequency</span>   — appears a lot here? (saturating: 50 hits ≠ 50×)
+    <span class="t">(2) inverse doc freq</span>  — a RARE, informative word? ("borewell" ≫ "the")
+    <span class="y">(3) length norm</span>      — don't let a giant doc win by sheer size</pre>
+    <p><b>Why it can't do the meaning job:</b> it's a <em>bag of words</em> — "login credentials" and "password" are just different strings. <b>But the twist:</b> BM25 nails the exact, rare tokens embeddings tend to blur — a part number <span class="mono">RD-1250</span>, error code <span class="mono">ENOENT</span>, a surname, a slug. Serious systems often run <strong>both and merge</strong> ("hybrid search").</p>
+    <p class="hand" style="text-align:center">Not BM25 <em>vs</em> embeddings. BM25 = exact words · embeddings = meaning · you often want both.</p>
+    <div class="fact"><span class="lbl">literally true</span><br>BM25 ("Best Matching 25", Okapi family) comes from the probabilistic-relevance work of Robertson, Spärck Jones and colleagues; term-frequency saturation and length normalization are tuned by parameters <span class="mono">k₁</span> and <span class="mono">b</span>. <span class="src">(Robertson &amp; Zaragoza, <em>The Probabilistic Relevance Framework: BM25 and Beyond</em>, Foundations and Trends in IR, 2009.)</span></div>
+    <div class="retrieve">
+      <span class="brain">↻ recall</span>
+      <div class="q">A user searches the exact error code <span class="mono">ENOENT</span>. Trust embeddings or BM25 here — and why?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans"><b>BM25.</b> Exact, rare token, no paraphrase to resolve — just a precise string. Embeddings might blur it toward generic "file error" text and miss the exact hit. This is where the old librarian beats the meaning map — and why hybrid search exists.</div>
+    </div>
+  </section>
+
+  <!-- 07 COSINE -->
+  <section class="reveal">
+    <span class="step-tag how">07 · cosine similarity</span>
+    <h2>Measure the angle, ignore the length</h2>
+    <p><b>Analogy beat.</b> Two vectors point somewhere on the map. <strong>Cosine similarity</strong> asks one thing — <em>do these arrows point the same way?</em> — and ignores how long they are. Drag the query and watch the ranking reshuffle.</p>
+    <div class="cos">
+      <svg viewBox="0 0 400 260" id="cossvg" aria-label="cosine angle diagram"></svg>
+      <input type="range" min="0" max="150" value="28" class="slider" id="qslider">
+      <div style="text-align:center;font-family:'Caveat',cursive;font-size:20px;color:var(--coral)">drag the <b>query</b> arrow (now at <span id="qval">28</span>°)</div>
+      <div id="ranklist" style="margin-top:14px"></div>
+    </div>
+    <p><b>Plain English.</b> Cosine = dot product divided by both lengths, scoring pure direction: <span class="mono">+1</span> same way, <span class="mono">0</span> unrelated, <span class="mono">−1</span> opposite. Direction carries meaning; length often just reflects passage length.</p>
+    <div class="note"><b>Notice:</b> "banana bread" has the <em>longest</em> arrow yet ranks last whenever the query points away. Length can't rescue a bad direction — that's the point of cosine.</div>
+    <div class="fact"><span class="lbl">calibrated</span><br>Cosine is the common <em>default</em>, not the only metric — dot product and Euclidean (L2) are also used. If vectors are <strong>normalized to length 1</strong> (many models output them so), cosine, dot product and L2 rank in the <em>same order</em>. Otherwise use the metric the model's card specifies. <span class="src">(standard linear-algebra / information-retrieval practice; provider model cards.)</span></div>
+    <div class="retrieve">
+      <span class="brain">↻ predict</span>
+      <div class="q">You double a document vector's length but keep its direction. What happens to its cosine with a query?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans"><b>Nothing.</b> Cosine divides out both lengths, so only the angle matters. The dot product <em>would</em> change, since it doesn't normalize.</div>
+    </div>
+  </section>
+
+  <!-- 08 DIMENSIONS -->
+  <section class="reveal">
+    <span class="step-tag how">08 · dimensions (N)</span>
+    <h2>Who decides how many numbers?</h2>
+    <p><b>Analogy beat.</b> Think of <strong>N</strong> as how many slots the librarian writes on each index card. A 384-slot card captures less nuance than a 3072-slot one — but costs more to store and search. <b>The library fixed that format when it trained the librarian.</b> You don't pick N; you pick a <em>model</em>, and its N is frozen — the same N for <em>every</em> text it embeds.</p>
+    <p>Turn the dial (storage assumes raw <span class="mono">float32</span> vectors, 1M documents, index overhead excluded):</p>
+    <div class="explorer">
+      <div class="ctrlrow" id="pctrl"></div>
+      <div class="statgrid">
+        <div class="stat"><div class="n" id="st1">–</div><div class="l">dimensions N</div></div>
+        <div class="stat"><div class="n" id="st2">–</div><div class="l">bytes / vector</div></div>
+        <div class="stat"><div class="n" id="st3">–</div><div class="l">storage · 1M docs</div></div>
+        <div class="stat"><div class="n" id="st4">–</div><div class="l">search cost</div></div>
+      </div>
+      <div class="strip" id="strip"></div>
+      <div class="striplabel" id="striplabel"></div>
+    </div>
+    <div class="fact"><span class="lbl">literally true · verified dimensions</span><br>N is fixed at training time. Real examples: <span class="mono">all-MiniLM-L6-v2</span> → 384, <span class="mono">all-mpnet-base-v2</span> → 768, Cohere <span class="mono">embed-v3</span> → 1024, OpenAI <span class="mono">text-embedding-3-small</span> → 1536, <span class="mono">-large</span> → 3072, Voyage <span class="mono">voyage-3-large</span> → 1024. Higher N can capture richer meaning but with diminishing returns and more cost — so people benchmark on their own data, not a leaderboard. <span class="src">(sentence-transformers / OpenAI / Cohere / Voyage model cards; MTEB benchmark: Muennighoff et al., 2022 — arXiv:2210.07316.)</span></div>
+    <div class="note"><b>The one twist that gives you a say — Matryoshka.</b> Some models pack the most important meaning into the <em>front</em> of the vector, so you can chop the tail (keep the first 256 of 1536) with a small accuracy hit — like nested dolls. <span class="src">(Matryoshka Representation Learning, Kusupati et al., NeurIPS 2022 — arXiv:2205.13147; supported by e.g. OpenAI text-embedding-3, Cohere v4, Nomic v1.5 — check the model card.)</span></div>
+    <div class="retrieve">
+      <span class="brain">↻ recall</span>
+      <div class="q">Do you ask "how many dimensions does <em>this particular document</em> need"?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans"><b>No.</b> N is a property of the <em>model</em>, never the text. Every document and query from one model comes out at the same N. Uniform length is the point — you can only compare vectors of equal length in the same space.</div>
+    </div>
+  </section>
+
+  <!-- 09 EMBEDDER != GENERATOR  (NEW) -->
+  <section class="reveal">
+    <span class="step-tag how">09 · embedder ≠ generator</span>
+    <h2>"I'm on Opus 4.8 — which Opus embedding?"</h2>
+    <p>This is the question almost everyone hits, and it's a category error. The chat/generation model and the embedding model are <strong>two different components you choose independently.</strong> There is no "Opus embedding."</p>
+    <pre class="ascii">   RAG has TWO model slots — pick each separately:
+
+   ┌─────────────────────────┐        ┌──────────────────────────┐
+   │  <span class="b">EMBEDDER (the "R")</span>       │        │  <span class="t">GENERATOR (the "G")</span>      │
+   │  text → vector          │        │  prompt → answer         │
+   │                         │   <span class="y">+</span>    │                          │
+   │  voyage-3, openai       │        │  Opus, GPT, local Llama  │
+   │  embeddings, nomic      │        │                          │
+   │  (Ollama), all-MiniLM   │        │  ← a chat model lives    │
+   │                         │        │     HERE only            │
+   └─────────────────────────┘        └──────────────────────────┘
+        builds the meaning-map             never touches embeddings</pre>
+    <p>You can run <strong>Opus 4.8 as the generator</strong> <em>and</em> <strong>a local Ollama embedder</strong> at once — different vendors, no problem. They don't talk directly: the embedder fills the vector store; the generator reads whatever chunks the search returns. ("ChatGPT" is likewise a chat product — its embeddings come from a <em>separate</em> OpenAI endpoint, not the chat model.)</p>
+    <div class="fact"><span class="lbl">literally true</span><br>Anthropic does not offer its own embedding model; its docs point to third-party providers (Voyage AI is named as preferred) while stating any quality embedding model works with Claude. Using a separate embedding API alongside the generator is standard practice. <span class="src">(Anthropic Embeddings documentation, docs.claude.com / platform.claude.com; anthropics/claude-cookbooks VoyageAI guide.)</span></div>
+    <div class="retrieve">
+      <span class="brain">↻ recall</span>
+      <div class="q">You picked Opus 4.8 to generate answers. Which "Opus embedding model" do you use to build the index?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans"><b>Trick question — there isn't one.</b> Opus is a generator. You choose a <em>separate</em> embedder (Voyage, OpenAI's embeddings endpoint, or a local model). The two slots are independent; only the generator is "Opus."</div>
+    </div>
+  </section>
+
+  <!-- 10 CHOOSING  (NEW) -->
+  <section class="reveal">
+    <span class="step-tag how">10 · choosing an embedder</span>
+    <h2>What forces the choice (almost nothing) — and what should</h2>
+    <p>Nothing external forces a particular embedder. Two hard constraints box you in: <strong>(1) consistency</strong> — the model that embeds your documents must embed your queries (switching later = re-embed everything); <strong>(2) your vector store must match</strong> the model's dimension N and recommended metric. Beyond that, it's your call — and a bad call just means quietly worse retrieval, which (per the trap) caps the whole system.</p>
+    <p>The factors that <em>should</em> decide it:</p>
+    <table class="cmp">
+      <tr><th>Factor</th><th>Why it matters</th><th>Concrete gotcha</th></tr>
+      <tr><td>Hosted vs local</td><td>privacy + cost + who runs the GPU</td><td>Sensitive data? A local model keeps it on your machine.</td></tr>
+      <tr><td>Max input tokens</td><td>caps the chunk size you can embed</td><td><span class="mono">all-MiniLM-L6-v2</span> ≈ 256 tokens — bigger chunks get truncated; <span class="mono">voyage-3-large</span> ≈ 32k.</td></tr>
+      <tr><td>Retrieval quality</td><td>the whole point; the ceiling on RAG</td><td>Leaderboards (MTEB) filter, don't decide — test on <em>your</em> data; rankings flip by domain.</td></tr>
+      <tr><td>Dimension N</td><td>storage + search speed</td><td>3072-dim is ~8× the footprint of 384-dim. Bigger ≠ better.</td></tr>
+      <tr><td>Domain / language</td><td>generic models miss jargon &amp; non-English</td><td>Vendors ship domain models (code, finance, legal).</td></tr>
+      <tr><td>Cost per token (hosted)</td><td>adds up over millions of docs</td><td>Cheapest-per-token isn't cheapest if it re-indexes more.</td></tr>
+    </table>
+    <div class="note"><b>The guideline doc you were looking for is the model card.</b> Every embedding model publishes one stating its fixed dimension, max input tokens, recommended distance metric, whether outputs are normalized, and often a <em>query vs document</em> distinction. Voyage, for instance, lets you set an <span class="mono">input_type</span> for queries vs documents to improve retrieval, and notes embeddings made with and without it stay compatible. <span class="src">(model cards; anthropics/claude-cookbooks VoyageAI guide.)</span></div>
+    <h3 style="margin-top:26px">"So why ever pay? Local is free."</h3>
+    <p>Mostly a fair instinct — local is the right default for private data, small-to-medium English corpora, and prototypes. But "free" only means <em>no API invoice</em>; the bill moves elsewhere:</p>
+    <pre class="ascii">   <span class="b">PAID API embedder</span>             <span class="t">LOCAL embedder</span>
+   $ per token                 $0 per token
+   data leaves machine         data stays private        ✓
+   zero infra to run           YOU run + scale the hardware
+   vendor handles updates      YOU manage versions / uptime
+   often higher quality        quality varies by model
+        <span class="dim">pay in money</span>                  <span class="dim">pay in time + hardware + ops</span></pre>
+    <div class="note"><b>The decision rule:</b> start local and free; <em>measure retrieval on your own queries</em>; reach for paid only when a specific factor forces it — weak retrieval on your data, inputs longer than the local model accepts, a specialised domain, multilingual needs, or scale where running it yourself costs more than the API.</div>
+    <div class="retrieve">
+      <span class="brain">↻ recall</span>
+      <div class="q">You ship a 384-dim local embedder, then six months later want a 1024-dim model for better retrieval. What's the real migration cost?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans">You must <b>re-embed the entire corpus</b> and rebuild the index — old and new vectors live in different spaces and different lengths, so they can't be compared. That's the "never mix models" + "fixed N" traps combined: changing the embedder is a full re-index, never a patch.</div>
+    </div>
+  </section>
+
+  <!-- 11 CPU vs GPU  (NEW) -->
+  <section class="reveal">
+    <span class="step-tag how">11 · do you need a GPU?</span>
+    <h2>It's a throughput question, not a requirement</h2>
+    <p><b>Why a GPU helps:</b> turning text into a vector means multiplying it through millions of weights — matrix multiplication, where the steps are <em>independent</em>. A CPU has a few fast cores built for sequential, latency-sensitive work; a GPU has thousands of small cores built for doing the same multiply on lots of data at once. Press run and race them on "embed 12 chunks":</p>
+
+    <!-- ANIM 3 -->
+    <div class="race">
+      <div class="lane">
+        <h4>CPU — a few cores, one-ish at a time <span class="tm" id="cputm"></span></h4>
+        <div class="cells" id="cpucells"></div>
+      </div>
+      <div class="lane">
+        <h4>GPU — thousands of cores, big batches at once <span class="tm" id="gputm"></span></h4>
+        <div class="cells" id="gpucells"></div>
+      </div>
+      <button class="btn" id="racebtn">▶ run both</button>
+    </div>
+
+    <div class="fact"><span class="lbl">literally true · calibrated</span><br>CPUs are latency-oriented (few powerful cores, large caches, branch prediction); GPUs are throughput-oriented (thousands of small SIMD cores) and so excel at the matrix math at the heart of neural networks. Crucially, the GPU's edge only appears <em>at scale</em> — for small networks/workloads a CPU can match or beat a GPU. <span class="src">(latency-vs-throughput design &amp; GPU matrix-multiply advantage: arXiv:2509.04594; "for smaller networks the CPU is faster than the GPU": HSF <em>Machine Learning on GPU</em> training material.)</span></div>
+
+    <p><b>Two things soften this a lot:</b></p>
+    <div class="note"><b>1 · You embed documents once, offline.</b> The bulk pass is a background job, not something a user waits on — overnight on a CPU may be fine for a one-time build; you only re-run it for <em>new</em> docs. <b>2 · Query-time is cheap either way.</b> A query embeds <em>one</em> short question in milliseconds on a CPU. So the GPU question is only about bulk indexing of large/changing corpora.</div>
+    <p><b>For your hardware specifically:</b></p>
+    <ul style="margin:0 0 16px;padding-left:22px">
+      <li>Small models exist for exactly this — a 384-dim model like <span class="mono">all-MiniLM</span> is built to run fast on CPU, trading some retrieval quality for "runs anywhere."</li>
+      <li>Apple Silicon isn't a plain CPU: its unified-memory GPU can accelerate embedding via PyTorch's <span class="mono">mps</span> backend — no discrete GPU needed. <span class="src">(PyTorch <em>Introducing Accelerated PyTorch Training on Mac</em>, MPS backend in PyTorch 1.12; requires macOS 12.3+; unified memory removes CPU↔GPU copy overhead — Hugging Face Apple-Silicon docs.)</span></li>
+      <li>Or sidestep owning a GPU entirely: a hosted embedding API does the bulk grinding on <em>their</em> hardware and hands you vectors.</li>
+    </ul>
+    <div class="retrieve">
+      <span class="brain">↻ predict (this opens the next topic)</span>
+      <div class="q">At query time the slow part isn't embedding one short question — it's finding the nearest vectors among 5 million stored ones. Is that search naturally parallel-and-simple like embedding, or does it need something cleverer than brute force?</div>
+      <button class="revealbtn" onclick="flip(this)">reveal answer</button>
+      <div class="ans">Brute-force comparison against all 5M vectors per query is too slow to scale — so it needs something cleverer: <b>approximate nearest-neighbour (ANN)</b> search, which gives up a sliver of exactness for an enormous speedup. That's the reason vector databases exist as a category — and the next thing to learn.</div>
+    </div>
+  </section>
+
+  <!-- 12 TRAPS -->
+  <section class="reveal">
+    <span class="step-tag trap">12 · here be dragons</span>
+    <h2>Where intuition breaks</h2>
+    <div class="trap"><span class="lbl">RAG doesn't make the model smarter</span>Its answer quality is <b>capped by its search quality.</b> Wrong pages → a confident, wrong answer grounded in irrelevant text. It reduces ungrounded gaps only when retrieval is good.</div>
+    <div class="trap"><span class="lbl">the model isn't the documents</span>A <em>random</em> N-array is worthless; the value is that <em>this</em> array lands near similar-meaning text. The worth lives in the learned weights, not the multiplication. "It's just numbers" is true of the output and misses the point.</div>
+    <div class="trap"><span class="lbl">embeddings encode topic, not truth</span>"Earth is flat" and "Earth is round" point nearly the same way. No similarity metric knows which is correct.</div>
+    <div class="trap"><span class="lbl">never mix models</span>Vectors from two different embedders live in incompatible spaces — comparing them is garbage. One model embeds both documents and queries; switching = full re-index.</div>
+    <div class="trap"><span class="lbl">cheap-but-bad retrieval is the costliest thing</span>Picking an embedder on price alone, never measuring, then blaming the generator (Opus/GPT) when answers are wrong — when the real culprit was a weak embedder feeding wrong pages.</div>
+    <div class="trap"><span class="lbl">"embeddings need a GPU"</span>You need throughput proportional to your corpus size and update rate — not the word "embedding." Most real corpora embed in a coffee break, once, on CPU or Apple-Silicon MPS.</div>
+  </section>
+
+  <!-- 13 ZOOM OUT -->
+  <section class="reveal">
+    <span class="step-tag">13 · zoom back out</span>
+    <h2>The whole pipeline, fully labelled</h2>
+    <p>Two phases. Build the library <span class="gen">offline</span> (once); answer questions <span class="retr">online</span> (per query). Note the embedder and generator are separate models.</p>
+    <pre class="ascii"> <span class="t">OFFLINE — build the library (once, the bulk/GPU-ish job)</span>
+ ┌─────────┐   ┌──────────┐   ┌─────────────┐   ┌──────────────────┐
+ │ your    │──▶│ <span class="y">chunk</span>    │──▶│ <span class="t">EMBEDDER</span>    │──▶│ store vectors in │
+ │ docs    │   │ into bits│   │ (model #1)  │   │ a <span class="b">vector store</span>   │
+ └─────────┘   └──────────┘   └─────────────┘   └──────────────────┘
+
+ <span class="b">ONLINE — answer a question (per query, cheap)</span>
+ ┌──────────┐  ┌───────────┐  ┌─────────────────┐  ┌──────────────┐
+ │ question │─▶│ <span class="t">EMBEDDER</span>  │─▶│ <span class="b">ANN search</span>: find │─▶│ top-k chunks │
+ │          │  │ (same #1) │  │ nearest vectors │  │ (the pages)  │
+ └──────────┘  └───────────┘  └─────────────────┘  └──────┬───────┘
+                                                          ▼
+                                       ┌──────────────────────────┐
+                                       │ chunks + question →       │
+                                       │ <span class="t">GENERATOR</span> (model #2) →    │
+                                       │ grounded answer           │
+                                       └──────────────────────────┘</pre>
+    <div class="note"><b>The one piece still teased:</b> <span class="retr">ANN search</span> — finding the closest vectors among millions without scanning them all. Brute-force cosine over 5M vectors per query doesn't scale; ANN trades a sliver of accuracy for huge speed. That's the next chunk, and why vector databases are their own category.</div>
+  </section>
+
+  <!-- 14 USE CASES -->
+  <section class="reveal">
+    <span class="step-tag">14 · where you'll use it</span>
+    <h2>Real-world calls</h2>
+    <div class="ucgrid">
+      <div class="uc"><h4>Docs / wiki Q&amp;A</h4><div class="mono">large + changing + private</div><p>Knowledge that updates often and must cite sources. The textbook RAG case.</p></div>
+      <div class="uc"><h4>Support over a product corpus</h4><div class="mono">hybrid: BM25 + embeddings</div><p>Users paraphrase ("can't log in") but also drop exact codes/SKUs. Run both, merge.</p></div>
+      <div class="uc"><h4>Private / local stack</h4><div class="mono">self-host embedder + any generator</div><p>Sensitive data? Generate vectors locally (sentence-transformers, or an embedder via Ollama); pair with any generator.</p></div>
+      <div class="uc no"><h4>Tiny, fixed doc set</h4><div class="mono">just paste it — skip RAG</div><p>Fits the context window and rarely changes? RAG is needless machinery.</p></div>
+      <div class="uc no"><h4>You want a new style/skill</h4><div class="mono">fine-tune, don't RAG</div><p>Changing <em>behaviour</em>, not recalling facts? Wrong hammer.</p></div>
+      <div class="uc no"><h4>Exact-ID lookups only</h4><div class="mono">keyword / SQL query</div><p>All exact strings, no paraphrase? BM25 or a DB query beats embeddings.</p></div>
+    </div>
+    <div class="note"><b>The decision, always:</b> changing/large/private <em>facts</em> you want cited → RAG · changing <em>behaviour/style</em> → fine-tune · small &amp; fixed → just paste · exact strings → keyword.</div>
+  </section>
+
+  <!-- 15 FAQ -->
+  <section class="reveal">
+    <span class="step-tag">15 · faq</span>
+    <h2>Questions you're about to have</h2>
+    <details><summary>Is "adding relevant context to the prompt" the same as RAG?</summary><div class="body">The generation half is identical. The difference is automation: RAG decides <em>which</em> chunks are relevant to a brand-new question against a library too big to paste, and fetches them at query time. Pasting context yourself is valid when you already know the right doc; RAG earns its keep when you don't, and can't, by hand.</div></details>
+    <details><summary>Is Opus 4.8 (or ChatGPT) my embedding model?</summary><div class="body">No. Those are generators. The embedder is a separate model you choose independently — Voyage, OpenAI's embeddings endpoint, or a local model. Anthropic doesn't ship its own embedder and points to third-party providers. <span class="src">(docs.claude.com Embeddings.)</span></div></details>
+    <details><summary>Higher dimensions are always better, right?</summary><div class="body">No. More dimensions can capture richer meaning but with diminishing returns, more storage, and slower search. The right N is task-dependent — benchmark on your own data. Matryoshka-trained models even let you truncate dimensions to trade a little accuracy for big savings.</div></details>
+    <details><summary>Local or paid embedder?</summary><div class="body">Start local and free — right for private data, small-to-medium English corpora, prototypes. Measure retrieval on your own queries. Reach for paid only when a factor forces it: weak retrieval on your data, longer inputs than the local model accepts, a specialised domain, multilingual needs, or scale where running it yourself costs more than the API.</div></details>
+    <details><summary>Do I need a GPU?</summary><div class="body">Only for bulk offline indexing of large or fast-changing corpora — and even then, embedding once overnight on CPU is often fine. Query-time embeds one short question in milliseconds. Small models run fast on CPU; Apple Silicon accelerates via PyTorch's MPS backend; or a hosted API does the grinding for you.</div></details>
+    <details><summary>What's a vector database for?</summary><div class="body">It stores embeddings and runs approximate nearest-neighbour (ANN) search — finding the closest vectors among millions without comparing against all of them. Brute force doesn't scale; ANN trades a sliver of exactness for a big speedup. That's the next concept after this page.</div></details>
+  </section>
+
+  <!-- 16 REFERENCES -->
+  <section class="reveal">
+    <span class="step-tag">16 · references</span>
+    <h2>Verify it yourself</h2>
+    <ul class="refs">
+      <li><span class="tag">RAG</span> Lewis et al., <em>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</em>, NeurIPS 2020 — arXiv:2005.11401.</li>
+      <li><span class="tag">DPR</span> Karpukhin et al., <em>Dense Passage Retrieval for Open-Domain QA</em>, EMNLP 2020 — arXiv:2004.04906.</li>
+      <li><span class="tag">WORD2VEC</span> Mikolov et al., <em>Efficient Estimation of Word Representations in Vector Space</em>, 2013 — arXiv:1301.3781.</li>
+      <li><span class="tag">SBERT</span> Reimers &amp; Gurevych, <em>Sentence-BERT</em>, EMNLP 2019 — arXiv:1908.10084.</li>
+      <li><span class="tag">TRANSFORMER</span> Vaswani et al., <em>Attention Is All You Need</em>, 2017 — arXiv:1706.03762.</li>
+      <li><span class="tag">BM25</span> Robertson &amp; Zaragoza, <em>The Probabilistic Relevance Framework: BM25 and Beyond</em>, 2009.</li>
+      <li><span class="tag">MTEB</span> Muennighoff et al., <em>MTEB: Massive Text Embedding Benchmark</em>, 2022 — arXiv:2210.07316.</li>
+      <li><span class="tag">MATRYOSHKA</span> Kusupati et al., <em>Matryoshka Representation Learning</em>, NeurIPS 2022 — arXiv:2205.13147.</li>
+      <li><span class="tag">LONG-CTX</span> Liu et al., <em>Lost in the Middle</em>, 2023 — arXiv:2307.03172.</li>
+      <li><span class="tag">GENERATION GAPS</span> Ji et al., <em>Survey of Hallucination in Natural Language Generation</em>, ACM Computing Surveys, 2023 — arXiv:2202.03629.</li>
+      <li><span class="tag">ANTHROPIC</span> Anthropic Embeddings documentation (no first-party embedder; Voyage AI recommended) — docs.claude.com / platform.claude.com; anthropics/claude-cookbooks VoyageAI guide (input_type).</li>
+      <li><span class="tag">GPU</span> Latency-vs-throughput design &amp; GPU matrix-multiply advantage — arXiv:2509.04594; "for smaller networks the CPU is faster than the GPU" — HSF <em>Machine Learning on GPU</em> training material.</li>
+      <li><span class="tag">APPLE MPS</span> PyTorch <em>Introducing Accelerated PyTorch Training on Mac</em> (MPS backend, PyTorch 1.12, macOS 12.3+); Hugging Face Apple-Silicon docs (unified memory).</li>
+      <li><span class="tag">MODEL DIMS</span> Embedding dimensions &amp; max-token limits from sentence-transformers, OpenAI, Cohere, and Voyage model cards (verify current versions).</li>
+    </ul>
+    <div class="note"><b>Honesty note:</b> the metaphors — open-book exam, librarian, grinder/grounds, meaning map — are teaching aids; only the technical claims are sourced above. In the cosine demo the math is exact but the arrow positions are illustrative placements, not real model output. In the dimension explorer, byte counts assume raw <span class="mono">float32</span> vectors (N×4 bytes) for 1M documents, excluding index/database overhead; "search cost ×1–×8" is a first-order statement that per-comparison cost scales with N — real ANN-indexed systems behave differently. The CPU/GPU race is a stylised illustration of sequential vs parallel processing, not a benchmark of real timings.</div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <div class="seed">
+    <span class="lbl">↻ diffuse-mode seed — chew on this away from the screen</span>
+    <h3>You embed 5M docs with a 768-dim model and store them. Later you re-embed only <em>new</em> docs with a 3072-dim model and keep the old 768-dim ones as-is. A query comes in — what breaks, and why?</h3>
+    <p style="margin:0">Hint: walk it through "never mix models" + "fixed N." The answer explains why migrating an embedding model is a full re-index, never a patch.</p>
+  </div>
+  <p class="made">made to be impossible to forget — not to be memorised.</p>
+</footer>
+
+<script>
+/* flip-card recall */
+function flip(btn){var a=btn.nextElementSibling;a.classList.toggle('open');btn.textContent=a.classList.contains('open')?'hide answer':'reveal answer';}
+
+/* split reveal */
+var sb=document.getElementById('splitbtn');
+if(sb)sb.addEventListener('click',function(){document.getElementById('split').classList.toggle('go');});
+
+/* ANIM 2: untrained vs trained scatter */
+var POINTS=[
+  {l:'cat',     c:'#6fd8c4', u:[72,70],  t:[18,22]},
+  {l:'dog',     c:'#6fd8c4', u:[30,52],  t:[26,15]},
+  {l:'kitten',  c:'#6fd8c4', u:[84,30],  t:[12,30]},
+  {l:'password',c:'#7fb2dd', u:[20,80],  t:[66,30]},
+  {l:'login',   c:'#7fb2dd', u:[60,18],  t:[72,40]},
+  {l:'account', c:'#7fb2dd', u:[44,40],  t:[60,44]},
+  {l:'banana',  c:'#f0c061', u:[88,62],  t:[28,80]},
+  {l:'bread',   c:'#f0c061', u:[14,34],  t:[38,86]}
+];
+var scatter=document.getElementById('scatter'), trained=false, dotEls=[];
+if(scatter){
+  POINTS.forEach(function(p){
+    var d=document.createElement('div');d.className='dot';d.style.background=p.c;
+    d.style.left=p.u[0]+'%';d.style.top=p.u[1]+'%';
+    d.innerHTML='<span class="dl">'+p.l+'</span>';
+    scatter.appendChild(d);dotEls.push(d);
+  });
+  var tb=document.getElementById('trainbtn');
+  tb.addEventListener('click',function(){
+    trained=!trained;
+    POINTS.forEach(function(p,i){
+      var xy=trained?p.t:p.u;
+      dotEls[i].style.left=xy[0]+'%';dotEls[i].style.top=xy[1]+'%';
+    });
+    scatter.classList.toggle('trained',trained);
+    tb.textContent=trained?'↺ untrain (scatter again)':'▶ train the model';
+  });
+}
+
+/* ANIM 3: cpu vs gpu race */
+var N_CHUNKS=12;
+var cpuC=document.getElementById('cpucells'), gpuC=document.getElementById('gpucells');
+var cpuTimers=[], gpuTimers=[];
+function buildCells(container,cls){
+  container.innerHTML='';var arr=[];
+  for(var i=0;i<N_CHUNKS;i++){var c=document.createElement('div');c.className='cell '+cls;container.appendChild(c);arr.push(c);}
+  return arr;
+}
+var cpuCells=cpuC?buildCells(cpuC,'cpu'):[], gpuCells=gpuC?buildCells(gpuC,'gpu'):[];
+function resetRace(){
+  cpuTimers.forEach(clearTimeout);gpuTimers.forEach(clearTimeout);cpuTimers=[];gpuTimers=[];
+  cpuCells.forEach(function(c){c.classList.remove('done');});
+  gpuCells.forEach(function(c){c.classList.remove('done');});
+  if(document.getElementById('cputm'))document.getElementById('cputm').textContent='';
+  if(document.getElementById('gputm'))document.getElementById('gputm').textContent='';
+}
+var rb=document.getElementById('racebtn');
+if(rb)rb.addEventListener('click',function(){
+  resetRace();
+  var CPU_STEP=260; // ms per chunk, sequential (stylised)
+  cpuCells.forEach(function(c,i){
+    cpuTimers.push(setTimeout(function(){
+      c.classList.add('done');
+      if(i===N_CHUNKS-1)document.getElementById('cputm').textContent='done · '+N_CHUNKS+' steps in sequence';
+    },CPU_STEP*(i+1)));
+  });
+  // GPU: two parallel batches of 6, each batch lights up together
+  var BATCH=6, BATCH_TIME=300;
+  gpuCells.forEach(function(c,i){
+    var batch=Math.floor(i/BATCH);
+    gpuTimers.push(setTimeout(function(){
+      c.classList.add('done');
+      if(i===N_CHUNKS-1)document.getElementById('gputm').textContent='done · 2 batches, in parallel';
+    },BATCH_TIME*(batch+1)));
+  });
+});
+
+/* cosine playground — real cosine math, illustrative arrow angles */
+var COSDOCS=[
+  {nm:'"reset your password"',  ang:18,  len:78,  col:'#7fb2dd'},
+  {nm:'"forgot my login"',      ang:38,  len:66,  col:'#6fd8c4'},
+  {nm:'"banana bread recipe"',  ang:118, len:104, col:'#f0c061'}
+];
+var OX=46, OY=214, QLEN=92;
+function pol(ang,len){var r=ang*Math.PI/180;return [OX+len*Math.cos(r), OY-len*Math.sin(r)];}
+function arrow(x1,y1,x2,y2,col,w){return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+col+'" stroke-width="'+w+'" stroke-linecap="round" marker-end="url(#ah-'+col.replace('#','')+')"/>';}
+function renderCos(q){
+  var svg=document.getElementById('cossvg'); if(!svg)return;
+  var cols=COSDOCS.map(function(d){return d.col;}).concat(['#d8503a']);
+  var defs='<defs>';
+  cols.forEach(function(c){defs+='<marker id="ah-'+c.replace('#','')+'" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="'+c+'"/></marker>';});
+  defs+='</defs>';
+  var s=defs;
+  s+='<line x1="'+OX+'" y1="'+OY+'" x2="382" y2="'+OY+'" stroke="#5b5246" stroke-width="1.5" opacity=".5"/>';
+  s+='<line x1="'+OX+'" y1="'+OY+'" x2="'+OX+'" y2="20" stroke="#5b5246" stroke-width="1.5" opacity=".5"/>';
+  COSDOCS.forEach(function(d){var p=pol(d.ang,d.len);s+=arrow(OX,OY,p[0],p[1],d.col,4);});
+  var pq=pol(q,QLEN);
+  s+=arrow(OX,OY,pq[0],pq[1],'#d8503a',5);
+  s+='<text x="'+(pq[0]+4)+'" y="'+(pq[1]-2)+'" font-family="JetBrains Mono" font-size="11" fill="#d8503a" font-weight="700">query</text>';
+  svg.innerHTML=s;
+  var ranked=COSDOCS.map(function(d){return {nm:d.nm,col:d.col,cos:Math.cos((q-d.ang)*Math.PI/180)};}).sort(function(a,b){return b.cos-a.cos;});
+  function verdict(c){return c>0.9?'strong match':c>0.5?'related':c>0?'weak':'unrelated';}
+  var html='';
+  ranked.forEach(function(r,i){
+    html+='<div class="rankrow'+(i===0?' top':'')+'"><span class="chip" style="background:'+r.col+'"></span><span class="nm">'+r.nm+'</span><span class="cv">'+r.cos.toFixed(2)+'</span><span class="vd">'+verdict(r.cos)+'</span></div>';
+  });
+  document.getElementById('ranklist').innerHTML=html;
+  document.getElementById('qval').textContent=q;
+}
+var qs=document.getElementById('qslider');
+if(qs){qs.addEventListener('input',function(){renderCos(parseInt(qs.value));});renderCos(28);}
+
+/* dimension explorer — bytes = N*4 (float32); storage = bytes*1e6; cost ∝ N */
+var PARAMS=[
+  {label:'384',  stats:[384, '1.5 KB', '1.5 GB', '×1'], segs:1},
+  {label:'768',  stats:[768, '3 KB',   '3.1 GB', '×2'], segs:2},
+  {label:'1536', stats:[1536,'6 KB',   '6.1 GB', '×4'], segs:4},
+  {label:'3072', stats:[3072,'12 KB',  '12.3 GB','×8'], segs:8}
+];
+var SEGCOLORS=['#2c5d86','#2c8f7f','#d8503a','#e0a32e','#6b4c9a','#3a7d44','#b5651d','#1f6f8b'];
+var pctrl=document.getElementById('pctrl'), active=1;
+if(pctrl){
+  PARAMS.forEach(function(p,i){
+    var b=document.createElement('button');b.className='pbtn'+(i===active?' active':'');b.textContent=p.label+'-dim';
+    b.addEventListener('click',function(){active=i;renderExplorer();});
+    pctrl.appendChild(b);
+  });
+  renderExplorer();
+}
+function renderExplorer(){
+  document.querySelectorAll('#pctrl .pbtn').forEach(function(b,i){b.classList.toggle('active',i===active);});
+  var p=PARAMS[active];
+  ['st1','st2','st3','st4'].forEach(function(id,i){var el=document.getElementById(id);if(el)el.textContent=p.stats[i];});
+  var strip=document.getElementById('strip');strip.innerHTML='';
+  for(var i=0;i<p.segs;i++){var s=document.createElement('div');s.className='seg';s.style.background=SEGCOLORS[i%SEGCOLORS.length];strip.appendChild(s);}
+  document.getElementById('striplabel').textContent='storage footprint ≈ '+p.segs+'× the 384-dim baseline';
+}
+
+/* scroll reveal */
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{threshold:.12});
+document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});
+</script>
+</body>
+</html>
